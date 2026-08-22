@@ -19,6 +19,7 @@ public class UpdateSettingsCommand(Settings settings) : Command
             settings
                 .SetAutoCheckUpdates(incoming.AutoCheckUpdates ?? true)
                 .SetDotNetSdkDirectoryPath(incoming.DotNetSdkDirectoryPath)
+                .SetDefaultScriptTargetFrameworkVersion(incoming.DefaultScriptTargetFrameworkVersion)
                 .SetScriptsDirectoryPath(incoming.ScriptsDirectoryPath)
                 .SetPackageCacheDirectoryPath(incoming.PackageCacheDirectoryPath)
                 .SetAppearanceOptions(incoming.Appearance)

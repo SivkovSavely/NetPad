@@ -1,5 +1,6 @@
 using MediatR;
 using NetPad.Common;
+using NetPad.Configuration;
 using NetPad.DotNet;
 using NetPad.Events;
 using NetPad.Scripts;
@@ -15,6 +16,7 @@ public class CreateScriptCommand(string? scriptName) : Command<Script>
         IScriptNameGenerator scriptNameGenerator,
         IScriptRepository scriptRepository,
         IDotNetInfo dotNetInfo,
+        Settings settings,
         IEventBus eventBus)
         : IRequestHandler<CreateScriptCommand, Script>
     {
@@ -24,8 +26,13 @@ public class CreateScriptCommand(string? scriptName) : Command<Script>
                 ? request.ScriptName
                 : scriptNameGenerator.Generate();
 
-            var targetFrameworkVersion = dotNetInfo.GetLatestSupportedDotNetSdkVersion()?.GetFrameworkVersion()
-                                         ?? GlobalConsts.AppDotNetFrameworkVersion;
+            var configuredVersion = settings.DefaultScriptTargetFrameworkVersion;
+            var targetFrameworkVersion = configuredVersion != null
+                                         && dotNetInfo.GetDotNetSdkVersions()
+                                             .Any(s => s.IsSupported() && s.GetFrameworkVersion() == configuredVersion)
+                                         ? configuredVersion.Value
+                                         : dotNetInfo.GetLatestSupportedDotNetSdkVersion()?.GetFrameworkVersion()
+                                           ?? GlobalConsts.AppDotNetFrameworkVersion;
 
             var script = await scriptRepository.CreateAsync(name, targetFrameworkVersion);
 

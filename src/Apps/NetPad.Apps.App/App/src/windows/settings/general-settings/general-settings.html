@@ -282,3 +282,32 @@ Only applicable when using the Integrated titlebar."></i>
         </div>
     </div>
 </div>
+
+<div class="section">
+    <div class="header">
+        <i class="dotnet-icon"></i>
+        SDK
+    </div>
+
+    <div class="body">
+        <div class="mb-3 row">
+            <label class="col-12 col-md-2 col-form-label fw-bold">Default SDK</label>
+            <div class="col-10 col-md-8">
+                <select class="form-select"
+                        value.bind="settings.defaultScriptTargetFrameworkVersion">
+                    <option value="">Latest available</option>
+                    <option value.bind="framework" repeat.for="framework of availableFrameworkVersions">
+                        .NET ${framework.replace('DotNet', '')}
+                    </option>
+                </select>
+            </div>
+            <div class="col-2 col-md-2 text-end">
+                <button class="btn btn-secondary"
+                        show.bind="settings.defaultScriptTargetFrameworkVersion != currentSettings.defaultScriptTargetFrameworkVersion"
+                        click.trigger="settings.defaultScriptTargetFrameworkVersion = currentSettings.defaultScriptTargetFrameworkVersion">
+                    Undo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

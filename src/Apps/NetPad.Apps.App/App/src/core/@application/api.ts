@@ -6791,6 +6791,7 @@ export class Settings implements ISettings {
     version!: string;
     autoCheckUpdates?: boolean | undefined;
     dotNetSdkDirectoryPath?: string | undefined;
+    defaultScriptTargetFrameworkVersion?: DotNetFrameworkVersion | undefined;
     scriptsDirectoryPath!: string;
     autoSaveScriptsDirectoryPath!: string;
     packageCacheDirectoryPath!: string;
@@ -6823,6 +6824,7 @@ export class Settings implements ISettings {
             this.version = _data["version"];
             this.autoCheckUpdates = _data["autoCheckUpdates"];
             this.dotNetSdkDirectoryPath = _data["dotNetSdkDirectoryPath"];
+            this.defaultScriptTargetFrameworkVersion = _data["defaultScriptTargetFrameworkVersion"];
             this.scriptsDirectoryPath = _data["scriptsDirectoryPath"];
             this.autoSaveScriptsDirectoryPath = _data["autoSaveScriptsDirectoryPath"];
             this.packageCacheDirectoryPath = _data["packageCacheDirectoryPath"];
@@ -6847,6 +6849,7 @@ export class Settings implements ISettings {
         data["version"] = this.version;
         data["autoCheckUpdates"] = this.autoCheckUpdates;
         data["dotNetSdkDirectoryPath"] = this.dotNetSdkDirectoryPath;
+        data["defaultScriptTargetFrameworkVersion"] = this.defaultScriptTargetFrameworkVersion;
         data["scriptsDirectoryPath"] = this.scriptsDirectoryPath;
         data["autoSaveScriptsDirectoryPath"] = this.autoSaveScriptsDirectoryPath;
         data["packageCacheDirectoryPath"] = this.packageCacheDirectoryPath;
@@ -6873,6 +6876,7 @@ export interface ISettings {
     version: string;
     autoCheckUpdates?: boolean | undefined;
     dotNetSdkDirectoryPath?: string | undefined;
+    defaultScriptTargetFrameworkVersion?: DotNetFrameworkVersion | undefined;
     scriptsDirectoryPath: string;
     autoSaveScriptsDirectoryPath: string;
     packageCacheDirectoryPath: string;

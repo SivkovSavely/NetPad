@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json.Serialization;
 using NJsonSchema;
 using NJsonSchema.Annotations;
+using NetPad.DotNet;
 
 namespace NetPad.Configuration;
 
@@ -32,6 +33,7 @@ public class Settings : ISettingsOptions
 
     [JsonInclude] public bool? AutoCheckUpdates { get; private set; }
     [JsonInclude] public string? DotNetSdkDirectoryPath { get; private set; }
+    [JsonInclude] public DotNetFrameworkVersion? DefaultScriptTargetFrameworkVersion { get; private set; }
     [JsonInclude] public string ScriptsDirectoryPath { get; private set; } = null!;
     [JsonInclude] public string AutoSaveScriptsDirectoryPath { get; private set; } = null!;
     [JsonInclude] public string PackageCacheDirectoryPath { get; private set; } = null!;
@@ -51,6 +53,12 @@ public class Settings : ISettingsOptions
     public Settings SetDotNetSdkDirectoryPath(string? dotNetSdkDirectoryPath)
     {
         DotNetSdkDirectoryPath = dotNetSdkDirectoryPath;
+        return this;
+    }
+
+    public Settings SetDefaultScriptTargetFrameworkVersion(DotNetFrameworkVersion? version)
+    {
+        DefaultScriptTargetFrameworkVersion = version;
         return this;
     }
 
