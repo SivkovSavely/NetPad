@@ -27,14 +27,20 @@ Before editing, inspect `git status --short --branch`. Do not modify `main` or o
 
 ## General workflow
 
-Minimize context usage. Optimize for minimum token/tool usage. Do not perform optional exploration, broad searches, repeated reads, self-review passes, or validation when the task can be completed from already-known context.
+Minimize total model/context cost, not merely tool-call count. Batch independent searches/reads when possible. Prefer one targeted search followed by a few relevant reads over serial exploration. Once enough evidence exists to implement safely, stop exploring and edit.
+
+Use context compression/DCP at natural phase boundaries when accumulated context would otherwise be repeatedly carried forward. Do not avoid compression merely to reduce tool-call count.
+
+Do not reread unchanged files or investigate optional context.
 
 Before editing:
 
-1. Inspect relevant implementation, tests, callers, and nearby conventions.
+1. Inspect the nearest analogous implementation and relevant tests. Reuse its runtime conventions (DI tokens/decorators, serialization, binding, registration, error handling, etc.), not just its types/API shape.
 2. Trace behavior across layers when necessary.
 3. Check whether current code already implements all or part of the requested behavior.
 4. For bugs, infer the likely cause from the provided evidence and relevant code. Do not reproduce or execute the application unless explicitly requested.
+
+Before finishing, ensure every explicit requested behavior/constraint is represented by the implementation or a relevant regression test. Do not broaden this into a general self-review.
 
 Do not read `README.md`, `CONTRIBUTING.md`, or documentation trees by default.
 Read documentation only when it is directly relevant to the current task.
@@ -188,6 +194,8 @@ Take extra care when changing:
 * filesystem/native-shell behavior;
 * authentication, secrets, process execution, or paths.
 
+For values crossing UI/API/serialization/persistence boundaries, preserve the existing representation and semantics of unset/default/null values.
+
 For framework/SDK fixes, preserve coverage for both the failing framework and a known-working one when practical. Do not run the tests.
 
 For Dump/output changes, consider GUI and headless/external execution paths where relevant.
@@ -206,7 +214,7 @@ Keep changes limited to files required by the task. Do not spend tokens on a sep
 
 ## Completion
 
-Stop once the requested implementation and appropriate tests are written.
+Stop once all explicit requirements are implemented and appropriate tests are written. Do not continue exploring for hypothetical improvements.
 
 Do not perform a separate validation or self-review pass unless explicitly requested.
 
@@ -218,3 +226,9 @@ Report concisely:
 4. what the user should run to validate it.
 
 Do not claim the implementation builds, compiles, passes tests, or works unless the user has provided such validation.
+
+## Output economy
+
+Minimize narration. Prefer tool calls/edits over describing what you are about to do.
+Do not repeat the task, explain obvious edits, or provide progress commentary unless needed.
+Keep final reports terse. Preserve technical terms, code, commands, paths, and meaningful uncertainty exactly.
