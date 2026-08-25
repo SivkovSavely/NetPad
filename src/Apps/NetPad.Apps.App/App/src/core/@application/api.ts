@@ -5782,6 +5782,8 @@ export class ScriptOutput implements IScriptOutput {
     order!: number;
     body?: string | undefined;
     format!: ScriptOutputFormat;
+    outputId?: string | undefined;
+    isUpdate!: boolean;
 
     constructor(data?: IScriptOutput) {
         if (data) {
@@ -5798,6 +5800,8 @@ export class ScriptOutput implements IScriptOutput {
             this.order = _data["order"];
             this.body = _data["body"];
             this.format = _data["format"];
+            this.outputId = _data["outputId"];
+            this.isUpdate = _data["isUpdate"];
         }
     }
 
@@ -5814,6 +5818,8 @@ export class ScriptOutput implements IScriptOutput {
         data["order"] = this.order;
         data["body"] = this.body;
         data["format"] = this.format;
+        data["outputId"] = this.outputId;
+        data["isUpdate"] = this.isUpdate;
         return data;
     }
 
@@ -5830,6 +5836,8 @@ export interface IScriptOutput {
     order: number;
     body?: string | undefined;
     format: ScriptOutputFormat;
+    outputId?: string | undefined;
+    isUpdate: boolean;
 }
 
 export type ScriptOutputKind = "Result" | "Sql" | "Error";

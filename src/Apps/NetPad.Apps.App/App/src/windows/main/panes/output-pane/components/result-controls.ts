@@ -1,4 +1,4 @@
-import {WithDisposables} from "@common";
+import {DisposableCollection, WithDisposables} from "@common";
 import {ResizableTable} from "@application/tables/resizable-table";
 
 export class ResultControls extends WithDisposables {
@@ -6,7 +6,15 @@ export class ResultControls extends WithDisposables {
         super();
     }
 
-    public bind(content: DocumentFragment) {
+    /**
+     * Binds interactive behavior to the given content and returns a scope containing the resources
+     * created for it. Non-empty scopes are also registered with this instance so they are released
+     * when the whole results element is cleared or disposed; callers may dispose a scope earlier to
+     * release resources of content that is being replaced, in which case they must remove it from
+     * this instance's ownership via removeDisposable() first.
+     */
+    public bind(content: DocumentFragment): DisposableCollection {
+        const scope = new DisposableCollection();
 
         for (const titledGroup of Array.from(content.querySelectorAll(".group.titled"))) {
             const title = titledGroup.querySelector(".title");
@@ -21,7 +29,7 @@ export class ResultControls extends WithDisposables {
             };
 
             title.addEventListener("click", clickHandler);
-            this.addDisposable(() => title.removeEventListener("click", clickHandler));
+            scope.add(() => title.removeEventListener("click", clickHandler));
         }
 
         for (const table of Array.from(content.querySelectorAll("table"))) {
@@ -40,7 +48,7 @@ export class ResultControls extends WithDisposables {
                 };
                 collapseTarget.addEventListener("click", clickHandler);
 
-                this.addDisposable(() => {
+                scope.add(() => {
                     collapseTarget?.removeEventListener("click", clickHandler);
                 });
 
@@ -51,7 +59,7 @@ export class ResultControls extends WithDisposables {
 
             const resizableTable = new ResizableTable(table);
             resizableTable.init();
-            this.addDisposable(resizableTable);
+            scope.add(resizableTable);
 
             if (table.tBodies.length > 0) {
                 const cells = Array.from(table.querySelectorAll(":scope > tbody > tr > td")) as HTMLTableCellElement[];
@@ -77,6 +85,14 @@ export class ResultControls extends WithDisposables {
 
             setTimeout(() => group.remove(), milliseconds);
         }
+
+        // Content without interactive resources (ex. plain text) produces an empty scope; retaining
+        // one of those for every output would accumulate unbounded over a long run.
+        if (!scope.isEmpty) {
+            this.addDisposable(scope);
+        }
+
+        return scope;
     }
 
     public expand(table: HTMLTableElement) {

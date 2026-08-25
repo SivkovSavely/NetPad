@@ -26,6 +26,13 @@ export class DumpContainer implements IDisposable {
     private scrollTop = 0;
     private disposables = new DisposableCollection();
 
+    // Binding scopes created for mutable outputs, keyed by output id. When a mutable output is
+    // replaced, the scope of the slot it replaces is disposed so its resources do not accumulate
+    // for the lifetime of the container.
+    private bindingScopes = new Map<string, IDisposable>();
+    // The binding scope created by the most recent beforeAppendHtml() call.
+    private lastBindingScope?: IDisposable;
+
     constructor(settings: Settings) {
         this.element = document.createElement("div");
         this.element.classList.add("dump-container");
@@ -75,7 +82,7 @@ export class DumpContainer implements IDisposable {
     public appendOutput(output: ScriptOutput) {
         // If output does not have an order
         if (!output.order || output.order <= 0) {
-            this.appendHtml(output.body);
+            this.renderOutput(output);
             return;
         }
 
@@ -87,7 +94,7 @@ export class DumpContainer implements IDisposable {
 
         // Append the output
         this.lastOutputOrder = output.order;
-        this.appendHtml(output.body);
+        this.renderOutput(output);
 
         // Append any "early" outputs that come after this output
         let earlyOutputIx: number;
@@ -97,7 +104,7 @@ export class DumpContainer implements IDisposable {
                 const pendingOutput = this.earlyMessagesOutputQueue[earlyOutputIx];
 
                 this.lastOutputOrder = pendingOutput.order;
-                this.appendHtml(pendingOutput.body);
+                this.renderOutput(pendingOutput);
 
                 this.earlyMessagesOutputQueue.splice(earlyOutputIx, 1);
             }
@@ -105,15 +112,44 @@ export class DumpContainer implements IDisposable {
         while (earlyOutputIx >= 0);
     }
 
+    private renderOutput(output: ScriptOutput) {
+        if (output.isUpdate && output.outputId) {
+            this.replaceOutput(output.outputId, output.body);
+        } else {
+            this.appendHtml(output.body, output.outputId);
+        }
+    }
+
     protected mutateHtmlBeforeAppend(html: string) {
         return html;
     }
 
     protected beforeAppendHtml(documentFragment: DocumentFragment) {
-        this.resultControls.bind(documentFragment);
+        this.lastBindingScope = this.resultControls.bind(documentFragment);
     }
 
-    private appendHtml(html: string | null | undefined) {
+    private takeLastBindingScope() {
+        const scope = this.lastBindingScope;
+        this.lastBindingScope = undefined;
+        return scope;
+    }
+
+    private swapBindingScope(outputId: string, scope?: IDisposable) {
+        const oldScope = this.bindingScopes.get(outputId);
+        if (oldScope) {
+            // The replaced scope is still owned by resultControls for whole-container cleanup;
+            // release it from there so it does not accumulate for the container's lifetime.
+            this.resultControls.removeDisposable(oldScope);
+            oldScope.dispose();
+        }
+        if (scope) {
+            this.bindingScopes.set(outputId, scope);
+        } else {
+            this.bindingScopes.delete(outputId);
+        }
+    }
+
+    private appendHtml(html: string | null | undefined, outputId?: string) {
         if (!html) {
             return;
         }
@@ -123,16 +159,23 @@ export class DumpContainer implements IDisposable {
         const template = document.createElement("template");
         template.innerHTML = html;
 
+        this.lastBindingScope = undefined;
         this.beforeAppendHtml(template.content);
+        const scope = this.takeLastBindingScope();
 
         const children = Array.from(template.content.children);
         if (!children.length)
             throw new Error("Empty DocumentFragment");
 
+        if (outputId) {
+            children[0].setAttribute("data-output-id", outputId);
+            if (scope) this.bindingScopes.set(outputId, scope);
+        }
+
         let htmlToAppendToLastRenderedOutput: string = "";
 
         for (const child of children) {
-            if (this.lastRenderedOutput && this.shouldAppendOutputChildToLastRenderedOutput(child, this.lastRenderedOutput)) {
+            if (!outputId && this.lastRenderedOutput && this.shouldAppendOutputChildToLastRenderedOutput(child, this.lastRenderedOutput)) {
                 const childHtml = child.innerHTML;
                 htmlToAppendToLastRenderedOutput += childHtml;
             } else {
@@ -154,15 +197,62 @@ export class DumpContainer implements IDisposable {
         this.processRenderQueue();
     }
 
-    protected afterAppendHtml() {
+    private replaceOutput(outputId: string, html: string | null | undefined) {
+        const renderedTarget = Array.from(this.element.children)
+            .find(element => element.getAttribute("data-output-id") === outputId);
+        if (renderedTarget) {
+            if (!html) return;
+
+            const replacement = this.createOutputChildren(html, outputId);
+            if (!replacement.children.length) return;
+
+            renderedTarget.replaceWith(...replacement.children);
+            if (this.lastRenderedOutput === renderedTarget) {
+                this.lastRenderedOutput = replacement.children[replacement.children.length - 1];
+            }
+            this.swapBindingScope(outputId, replacement.scope);
+            this.postProcessRenderedElements(replacement.children);
+            this.afterRenderedOutput();
+            return;
+        }
+
+        const pendingIx = this.renderQueue.findIndex(element => element.getAttribute("data-output-id") === outputId);
+        if (pendingIx < 0 || !html) return;
+
+        const target = this.renderQueue[pendingIx];
+        const replacement = this.createOutputChildren(html, outputId);
+        if (!replacement.children.length) return;
+
+        this.renderQueue.splice(pendingIx, 1, ...replacement.children);
+        if (this.lastRenderedOutput === target) {
+            this.lastRenderedOutput = replacement.children[replacement.children.length - 1];
+        }
+        this.swapBindingScope(outputId, replacement.scope);
     }
 
-    private processRenderQueue = Util.debounce(this, () => {
-        const batch = [...this.renderQueue.splice(0)];
+    private createOutputChildren(html: string, outputId?: string) {
+        html = this.mutateHtmlBeforeAppend(html);
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        this.lastBindingScope = undefined;
+        this.beforeAppendHtml(template.content);
+        const scope = this.takeLastBindingScope();
 
-        for (let iEl = 0; iEl < batch.length; iEl++) {
-            const group = batch[iEl];
+        const children = Array.from(template.content.children);
+        if (!children.length) {
+            // Nothing was rendered from the candidate, so discard any resources created for it.
+            scope?.dispose();
+            return {children, scope: undefined};
+        }
 
+        if (outputId) {
+            children[0].setAttribute("data-output-id", outputId);
+        }
+        return {children, scope};
+    }
+
+    private postProcessRenderedElements(elements: Element[]) {
+        for (const group of elements) {
             if (group.classList.contains("code")) {
                 const codeEl = group.querySelector("code");
                 if (codeEl) {
@@ -203,12 +293,27 @@ export class DumpContainer implements IDisposable {
                 const script = document.createElement("script");
                 const code = document.createTextNode(group.textContent ?? "");
                 script.appendChild(code);
-
                 // Replace the previous script
                 group.lastElementChild.remove();
                 group.appendChild(script);
             }
         }
+    }
+
+    private afterRenderedOutput() {
+        if (this.scrollOnOutput) {
+            this.navigationControls.navigateBottom();
+        }
+        this.afterAppendHtml();
+    }
+
+    protected afterAppendHtml() {
+    }
+
+    private processRenderQueue = Util.debounce(this, () => {
+        const batch = [...this.renderQueue.splice(0)];
+
+        this.postProcessRenderedElements(batch);
 
         if (batch.length === 0) {
             return;
@@ -216,11 +321,7 @@ export class DumpContainer implements IDisposable {
 
         this.element.append(...batch);
 
-        if (this.scrollOnOutput) {
-            this.navigationControls.navigateBottom()
-        }
-
-        this.afterAppendHtml();
+        this.afterRenderedOutput();
     }, 5);
 
     protected beforeClearOutput() {
@@ -236,6 +337,7 @@ export class DumpContainer implements IDisposable {
         this.beforeClearOutput();
         this.lastRenderedOutput = null;
         this.renderQueue.splice(0);
+        this.bindingScopes.clear();
         this.element.innerHTML = "";
 
         if (reset) {
@@ -245,7 +347,9 @@ export class DumpContainer implements IDisposable {
     }
 
     private shouldAppendOutputChildToLastRenderedOutput(child: Element, lastRenderedOutput: Element) {
-        if (!lastRenderedOutput || child.classList.contains("titled")) return false;
+        if (!lastRenderedOutput
+            || lastRenderedOutput.hasAttribute("data-output-id")
+            || child.classList.contains("titled")) return false;
 
         const lastOutputIsInlinableGroupText = lastRenderedOutput.classList.contains("group")
             && lastRenderedOutput.classList.contains("text")

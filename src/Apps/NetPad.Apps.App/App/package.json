@@ -37,6 +37,7 @@
             ]
         },
         "moduleNameMapper": {
+            "^.+\\.(css|less|sass|scss|styl)$": "jest-transform-stub",
             "@common/(.*)": "<rootDir>/src/core/@common/$1",
             "@common": "<rootDir>/src/core/@common",
             "@application/(.*)": "<rootDir>/src/core/@application/$1",
