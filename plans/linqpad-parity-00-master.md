@@ -80,20 +80,20 @@ Minimal shared runtime/CLI change allowed only where a selected feature needs it
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[B]` blocked (with reason) · `[N]` intentionally not applicable/documented difference.
 
-### Dump/presentation (plan 01)
-- [ ] instance `ToDump()`
-- [ ] script-global/static `ToDump(object)`
-- [ ] richer `DumpOptions`
-- [ ] `DumpOptions.Default` / global dump defaults equivalent
-- [ ] complete public `DumpContainer`
-- [ ] `HighlightIf`
-- [ ] `WithCssClass`
-- [ ] `WordRun`
-- [ ] `VerticalRun`
-- [ ] `WithHeading`
-- [ ] `Util.Dif`
-- [ ] `DumpTell`
-- [ ] `DumpAsync(IAsyncEnumerable<T>)`
+### Dump/presentation (plan 01) — COMPLETE at `8d607973` + `783e3a8d`
+- [x] instance `ToDump()`
+- [x] script-global/static `ToDump(object)` (via `Util.RegisterToDumpTransformer`; loaded-source auto-discovery lands with plan 04)
+- [x] richer `DumpOptions` (MaxRows/MaxDepth/Expanded/IncludeMembers/ExcludeMembers/FormatStrings)
+- [x] `DumpOptions.Default` / global dump defaults equivalent (`Util.DumpDefaults`)
+- [x] complete public `DumpContainer` (Title/CssClasses/Options/AppendContent/ClearContent)
+- [x] `HighlightIf`
+- [x] `WithCssClass`
+- [x] `WordRun`
+- [x] `VerticalRun`
+- [x] `WithHeading`
+- [x] `Util.Dif`
+- [x] `DumpTell`
+- [x] `DumpAsync(IAsyncEnumerable<T>)`
 
 ### Script-facing/host APIs (plan 02)
 - [ ] `Hyperlinq`
@@ -237,7 +237,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[B]` blocked (with rea
 ## Architectural decisions log
 
 1. **Mutable outputs**: single protocol = `ScriptOutput.OutputId`/`IsUpdate` end-to-end (host writer → IPC → frontend slot replace). Live controls (plan 03) layer event delegation + typed request messages on top; they do not get their own output channel.
-2. **ToDump**: implemented at the presentation seam (instance hook discovered during O2Html serialization traversal via a wrapper converter; script-global transformer registry consulted first per LINQPad precedence: script-global `ToDump(object)` runs *before* instance hooks? — resolve against public docs during implementation; document final choice here). Recursion guard via visited-set keyed traversal context; errors render an error group instead of poisoning the stream.
+2. **ToDump** (final): script-global transformer first, then instance hooks chained across transformation results; interception via a first-position O2Html converter + converter-less fallback serializer; per-traversal reference marks + 16-step guard against cycles; hook errors render as per-node error groups. See plan 01 notes.
 3. **DumpOptions precedence**: explicit call/container > `Util.DumpDefaults` (script-global, runtime-only) > NetPad Results settings (already applied via `PresentationSettings`/serializer limits) > built-ins. Unset members are `null` so they never override lower layers. Changing `DumpDefaults` never writes app Settings.
 4. **Checked arithmetic**: `CSharpCodeCompiler` already sets `OverflowChecks(true)` globally; add per-script `ScriptConfig` flag persisted optionally; absent ⇒ true (current behavior preserved); LINQPad-style toggle exposed in script properties UI.
 5. **Source generators**: generator driver already exists in `CSharpCodeCompiler`; plan 04 focuses on NuGet analyzer asset discovery, fingerprint inputs, diagnostics surfacing, isolation review.

@@ -119,6 +119,63 @@ None on other plans. Provides the global-transformer seam that plan 04 loaded-so
 - [ ] Master plan checklist ticked + commit hashes logged below
 - [ ] Concise user validation notes left here
 
+## Status: COMPLETE (runtime + frontend; see notes)
+
 ## Progress log
 
-(commits appended here as they land)
+- `8d607973` — ToDump (instance + script-global transformers), richer DumpOptions + `Util.DumpDefaults` (`DumpOptions.Default`), complete DumpContainer surface, composition helpers (HighlightIf/WithCssClass/WordRun/VerticalRun/WithHeading). Vendored O2Html converter-cache fix. Tests: ToDump/DumpOptions/DumpContainerSurface/CompositionHelper suites.
+- `783e3a8d` — Dumped-error source-location linkification seam (`source-linkify.ts` + `onNavigateToSource` wired to session open) + Jest spec.
+- Util.Dif implemented in the same runtime commit (DiffEngine + DiffResultHtmlConverter + `Util.Dif`).
+- DumpTell and DumpAsync(IAsyncEnumerable) implemented in the same runtime commit.
+
+## Implementation notes / decisions made during execution
+
+1. **ToDump precedence**: script-global transformer runs FIRST on the raw value, then instance hooks chain on successive results (guarded, once per traversal by reference). Cyclic/self-returning chains are bounded (reference set + 16-step guard) and render raw instead of looping.
+2. **Mechanism**: a `ToDumpHtmlConverter` placed first in NetPad's O2Html converter list intercepts values when a global transformer is registered or the type declares an instance hook; transformed results re-enter the standard pipeline through a converter-less fallback serializer using the *result's runtime type*.
+3. **O2Html vendored change**: `HtmlSerializer.GetConverter` only uses its static per-type cache when no custom converters are registered (custom sets differ per instance and would poison the shared cache). Plus `InternalsVisibleTo("NetPad.Runtime")`.
+4. **Per-dump options plumbing**: active `DumpOptions` flow via a ThreadStatic ambient context pushed in `SerializeToElement`; gated converters (member filter incl. table headers, row limiting, format strings) activate only when relevant options exist, so default rendering is byte-identical to before.
+5. **Expanded** renders as a `data-expanded` attribute (no frontend collapse behavior exists yet to honor it); FormatStrings apply to IFormattable/scalars by full or simple type name.
+6. **Script-global defaults merge point**: user-facing `Dump()` entry points and DumpContainer writes; direct internal `HtmlPresenter` calls (system notices, SQL) intentionally bypass defaults so scripts cannot restyle host messages.
+7. **DumpAsync**: interactive sessions get one slot ("AE" id) updated every 50 items; row cap stops consuming the source; cancellation appends a metatext notice; enumeration errors keep partial rows, append an error group, and rethrow.
+8. **Exception links**: anchors carry data attributes; navigation callback currently opens via `session.openByPath` best-effort (line positioning deferred to plan 05/07).
+
+## Validation performed (by agent)
+
+- `scripts/agent-test.sh src/Tests/NetPad.Runtime.Tests/... --filter Presentation` → 77/77 pass.
+- Full solution `scripts/agent-test.sh` → all green except two pre-existing/environmental failures unrelated to this work:
+  - `OmniSharp.NET` vendored project fails to compile on this machine even at baseline (verified via stash).
+  - `Can_Compile_CSharp11_Features` requires .NET 7 SDK reference assemblies not installed here.
+- Frontend: new `source-linkify.spec.ts` → 6/6 pass; `tsc --noEmit` clean.
+
+## User validation suggestions
+
+Run a script like:
+
+```csharp
+// ToDump
+class P { public string Name = "x"; object ToDump() => new { Name, Custom = true }; }
+new P().Dump();
+using (Util.RegisterToDumpTransformer(v => v is int i ? i * 10 : v))
+    42.Dump();
+
+// Defaults + options
+Util.DumpDefaults = new DumpOptions(MaxRows: 3);
+Enumerable.Range(1, 100).ToArray().Dump();                       // truncated to 3
+Enumerable.Range(1, 100).ToArray().Dump(new DumpOptions(MaxRows: 5)); // explicit wins
+Util.DumpDefaults = new DumpOptions();
+
+// Container
+var dc = new DumpContainer("loading") { Title = "progress" }.Dump();
+dc.AppendContent(new { Step = 1 });
+dc.ClearContent();
+dc.UpdateContent("done");
+
+// Composition / Dif / Tell
+Util.WithHeading("Hi", Util.WordRun("a", "b")).Dump();
+Util.Dif("line1\nline2", "line1\nchanged").Dump();
+
+// Async
+await GenerateAsync().DumpAsync("stream");
+```
+
+Then trigger an exception with a file path in the message and confirm the `file.cs:12` text is clickable.
