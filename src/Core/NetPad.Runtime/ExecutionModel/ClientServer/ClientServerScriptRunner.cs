@@ -269,6 +269,8 @@ public partial class ClientServerScriptRunner : IScriptRunner
         ipcGateway.On<ScriptHostExitedMessage>(OnScriptHostExitedMessage);
         ipcGateway.On<MemCacheItemInfoChangedMessage>(msg =>
             _eventBus.PublishAsync(new ScriptMemCacheItemInfoChangedEvent(_script.Id, msg.Items)));
+        ipcGateway.On<RunScriptFromPathMessage>(msg =>
+            _eventBus.PublishAsync(new RunScriptRequestedEvent(msg.Path)));
     }
 
     private async void OnRequestUserInputMessage(RequestUserInputMessage _)
@@ -397,6 +399,11 @@ public partial class ClientServerScriptRunner : IScriptRunner
     public void ClearMemCacheItems()
     {
         _scriptHostProcessManager.Send(new ClearMemCacheMessage());
+    }
+
+    public void ExpandOutput(string outputId)
+    {
+        _scriptHostProcessManager.Send(new ExpandOutputMessage(outputId));
     }
 
     /// <summary>

@@ -334,6 +334,13 @@ public class ScriptsController(IMediator mediator, IScriptRepository scriptRepos
         environment.ClearMemCacheItems();
     }
 
+    [HttpPatch("{id:guid}/on-demand/expand")]
+    public async Task ExpandOnDemand(Guid id, [FromQuery] string outputId)
+    {
+        var environment = await GetScriptEnvironmentAsync(id);
+        environment.ExpandOutput(outputId);
+    }
+
     private async Task<Script> GetScriptAsync(Guid id)
     {
         var script = session.Get(id)?.Script;

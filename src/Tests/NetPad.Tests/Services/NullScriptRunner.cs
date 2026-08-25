@@ -51,4 +51,8 @@ public class NullScriptRunner : IScriptRunner
     public void ClearMemCacheItems()
     {
     }
+
+    public void ExpandOutput(string outputId)
+    {
+    }
 }

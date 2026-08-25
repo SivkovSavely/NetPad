@@ -228,6 +228,10 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
     {
     }
 
+    public void ExpandOutput(string outputId)
+    {
+    }
+
     public void Dispose()
     {
         _logger.LogTrace("Dispose start");

@@ -258,6 +258,10 @@ public sealed class InMemoryScriptRunner : IScriptRunner
     {
     }
 
+    public void ExpandOutput(string outputId)
+    {
+    }
+
     public void Dispose()
     {
         _logger.LogTrace("Dispose start");

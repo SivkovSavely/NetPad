@@ -105,6 +105,7 @@ public class Startup
         services.AddHostedService<EventHandlerBackgroundService>();
         services.AddHostedService<EventForwardToIpcBackgroundService>();
         services.AddHostedService<ScriptEnvironmentBackgroundService>();
+        services.AddHostedService<UtilRunScriptBackgroundService>();
         services.AddHostedService<ScriptsFileWatcherBackgroundService>();
         // Should be the last hosted service so it runs last on app start
         services.AddHostedService<AppSetupAndCleanupBackgroundService>();

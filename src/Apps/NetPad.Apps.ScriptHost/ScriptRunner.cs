@@ -24,6 +24,9 @@ public class ScriptRunner
     {
         _ipcGateway = ipcGateway;
         DumpExtension.UseSink(ClientServerDumpSink.Instance);
+
+        // Allows scripts to request other scripts to be opened and run in the parent app (Util.Run).
+        Util.OnRequestRunScript = path => _ipcGateway.Send(new RunScriptFromPathMessage(path));
     }
 
     public void Run(RunScriptMessage message)
@@ -36,6 +39,9 @@ public class ScriptRunner
             message.ScriptFilePath,
             message.IsDirty
         ));
+
+        // Values registered via Util.OnDemand are only valid for the current run.
+        Util.ClearOnDemandRegistry();
 
         ClientServerDumpSink.Instance.RedirectStdIO(
             str =>
@@ -142,6 +148,11 @@ public class ScriptRunner
     public void ReceiveUserInput(ReceiveUserInputMessage message)
     {
         _userInputRequest?.TrySetResult(message.Input);
+    }
+
+    public void ExpandOutput(ExpandOutputMessage message)
+    {
+        Util.ExpandOnDemand(message.OutputId);
     }
 
     private void StartForwardingMemCacheItemInfoChanges()

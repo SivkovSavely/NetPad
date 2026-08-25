@@ -23,6 +23,7 @@ ipc.On<ReceiveUserInputMessage>(msg => runner.ReceiveUserInput(msg));
 ipc.On<DumpMemCacheItemMessage>(msg => ScriptRunner.DumpMemCacheItem(msg));
 ipc.On<DeleteMemCacheItemMessage>(msg => ScriptRunner.DeleteMemCacheItem(msg));
 ipc.On<ClearMemCacheMessage>(msg => ScriptRunner.ClearMemCache(msg));
+ipc.On<ExpandOutputMessage>(msg => runner.ExpandOutput(msg));
 ipc.Listen(defaultConsoleIn, _ => { });
 
 // Notify parent that this process (script-host) is ready.

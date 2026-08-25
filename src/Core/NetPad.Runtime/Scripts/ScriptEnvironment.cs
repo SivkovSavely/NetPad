@@ -313,6 +313,11 @@ public class ScriptEnvironment : IDisposable, IAsyncDisposable
         _runner.ClearMemCacheItems();
     }
 
+    public void ExpandOutput(string outputId)
+    {
+        _runner.ExpandOutput(outputId);
+    }
+
     private void SetStatus(ScriptStatus status)
     {
         if (status == Status)

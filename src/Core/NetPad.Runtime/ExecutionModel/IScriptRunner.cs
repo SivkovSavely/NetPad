@@ -41,4 +41,10 @@ public interface IScriptRunner : IDisposable
     void DumpMemCacheItem(string key);
     void DeleteMemCacheItem(string key);
     void ClearMemCacheItems();
+
+    /// <summary>
+    /// Evaluates an on-demand value previously registered during a script run
+    /// (see <see cref="ScriptServices.Util.OnDemand{T}"/>) and writes its result to the output.
+    /// </summary>
+    void ExpandOutput(string outputId);
 }
