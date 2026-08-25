@@ -82,6 +82,9 @@ public class ExternalProcessDumpSink : IDumpSink
     }
 
     public void ResultWrite<T>(T? o, DumpOptions? options = null)
+        => ResultWrite(o, options, null, false);
+
+    public void ResultWrite<T>(T? o, DumpOptions? options, string? outputId, bool isUpdate)
     {
         options ??= new DumpOptions();
 
@@ -101,7 +104,7 @@ public class ExternalProcessDumpSink : IDumpSink
             }
         }
 
-        TrackWrite(_output?.WriteResultAsync(o, options));
+        TrackWrite(_output?.WriteResultAsync(o, options, outputId, isUpdate));
     }
 
     public void SqlWrite<T>(T? o, DumpOptions? options = null)

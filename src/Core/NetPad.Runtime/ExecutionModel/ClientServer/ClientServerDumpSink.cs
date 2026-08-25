@@ -30,6 +30,9 @@ public class ClientServerDumpSink : IDumpSink
     }
 
     public void ResultWrite<T>(T? o, DumpOptions? options = null)
+        => ResultWrite(o, options, null, false);
+
+    public void ResultWrite<T>(T? o, DumpOptions? options, string? outputId, bool isUpdate)
     {
         if (_isHtmlOutput && options?.AppendNewLineToAllTextOutput == null)
         {
@@ -49,7 +52,7 @@ public class ClientServerDumpSink : IDumpSink
             }
         }
 
-        _ = _output?.WriteResultAsync(o, options);
+        _ = _output?.WriteResultAsync(o, options, outputId, isUpdate);
     }
 
     public void SqlWrite<T>(T? o, DumpOptions? options = null)

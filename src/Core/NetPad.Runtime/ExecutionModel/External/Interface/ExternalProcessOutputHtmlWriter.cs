@@ -15,7 +15,10 @@ public class ExternalProcessOutputHtmlWriter(Func<string, Task> writeToMainOut, 
     private uint _resultOutputCounter;
     private uint _sqlOutputCounter;
 
-    public async Task WriteResultAsync(object? output, DumpOptions? options = null)
+    public Task WriteResultAsync(object? output, DumpOptions? options = null)
+        => WriteResultAsync(output, options, null, false);
+
+    public async Task WriteResultAsync(object? output, DumpOptions? options, string? outputId, bool isUpdate)
     {
         options ??= new DumpOptions();
 
@@ -28,6 +31,10 @@ public class ExternalProcessOutputHtmlWriter(Func<string, Task> writeToMainOut, 
         }
 
         var html = HtmlPresenter.Serialize(output, options: options);
+        if (outputId != null && html.Length == 0)
+        {
+            html = "<div class=\"group\"></div>";
+        }
 
         if (dumpRawHtml)
         {
@@ -35,7 +42,11 @@ public class ExternalProcessOutputHtmlWriter(Func<string, Task> writeToMainOut, 
         }
         else
         {
-            var scriptOutput = new ScriptOutput(ScriptOutputKind.Result, order, html, ScriptOutputFormat.Html);
+            var scriptOutput = new ScriptOutput(ScriptOutputKind.Result, order, html, ScriptOutputFormat.Html)
+            {
+                OutputId = outputId,
+                IsUpdate = isUpdate
+            };
             var serializedOutput = Common.JsonSerializer.Serialize(scriptOutput);
             await writeToMainOut(serializedOutput);
         }

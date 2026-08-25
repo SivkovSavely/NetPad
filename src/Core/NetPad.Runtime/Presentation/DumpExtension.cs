@@ -62,6 +62,12 @@ public static class DumpExtension
         return o;
     }
 
+    public static DumpContainer Dump(this DumpContainer container)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        return container.Dump();
+    }
+
     /// <summary>
     /// Dumps an object, or value, to the results console, awaiting the call first.
     /// </summary>

@@ -9,6 +9,10 @@ internal class NullDumpSink : IDumpSink
     {
     }
 
+    public void ResultWrite<T>(T? o, DumpOptions? options, string? outputId, bool isUpdate)
+    {
+    }
+
     public void SqlWrite<T>(T? o, DumpOptions? options = null)
     {
     }

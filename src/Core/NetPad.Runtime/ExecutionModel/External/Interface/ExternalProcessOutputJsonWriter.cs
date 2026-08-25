@@ -28,7 +28,7 @@ internal class ExternalProcessOutputJsonWriter(Func<string, Task> writeToMainOut
         MaxDepth = 10
     };
 
-    public async Task WriteResultAsync(object? output, DumpOptions? options = null)
+    public async Task WriteResultAsync(object? output, DumpOptions? options = null, string? outputId = null, bool isUpdate = false)
     {
         uint order = Interlocked.Increment(ref _resultOutputCounter);
 
@@ -44,7 +44,11 @@ internal class ExternalProcessOutputJsonWriter(Func<string, Task> writeToMainOut
         else
         {
             var valueJson = SerializeValue(output);
-            var scriptOutput = new ScriptOutput(ScriptOutputKind.Result, order, valueJson, ScriptOutputFormat.Json);
+            var scriptOutput = new ScriptOutput(ScriptOutputKind.Result, order, valueJson, ScriptOutputFormat.Json)
+            {
+                OutputId = outputId,
+                IsUpdate = isUpdate
+            };
             await writeToMainOut(NetPad.Common.JsonSerializer.Serialize(scriptOutput));
         }
     }

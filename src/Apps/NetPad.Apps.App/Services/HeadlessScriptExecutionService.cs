@@ -8,8 +8,6 @@ using NetPad.Dtos;
 using NetPad.Events;
 using NetPad.ExecutionModel;
 using NetPad.ExecutionModel.External;
-using NetPad.IO;
-using NetPad.Presentation;
 using NetPad.Scripts;
 using NetPad.Scripts.Events;
 using NetPad.Sessions;
@@ -26,8 +24,6 @@ public class HeadlessScriptExecutionService(
     IEventBus eventBus,
     ILogger<HeadlessScriptExecutionService> logger)
 {
-    private const int MaxOutputSize = 100 * 1024; // ~100KB
-
     public async Task<HeadlessRunResult> RunCodeAsync(HeadlessRunRequest request, CancellationToken cancellationToken)
     {
         var targetFramework = request.TargetFramework
@@ -124,33 +120,12 @@ public class HeadlessScriptExecutionService(
 
     private async Task<HeadlessRunResult> ExecuteScriptAsync(Script script, int? timeoutMs, CancellationToken cancellationToken)
     {
-        var output = new List<ScriptOutput>();
-        var errors = new List<string>();
-        int totalOutputSize = 0;
-        bool outputTruncated = false;
+        // Folds mutable updates and enforces the max output size, matching GUI-run capture.
+        var foldBuffer = new ScriptOutputFoldBuffer();
 
         using var runner = runnerFactory.CreateRunner(script);
 
-        runner.AddOutput(new ActionOutputWriter<object>((o, _) =>
-        {
-            if (outputTruncated || o is not ScriptOutput so) return;
-
-            if (so.Kind == ScriptOutputKind.Error)
-            {
-                errors.Add(so.Body ?? string.Empty);
-                return;
-            }
-
-            totalOutputSize += so.Body?.Length ?? 0;
-            if (totalOutputSize > MaxOutputSize)
-            {
-                outputTruncated = true;
-                output.Add(new ScriptOutput(ScriptOutputKind.Result, "[Output truncated — exceeded 100KB limit]"));
-                return;
-            }
-
-            output.Add(so);
-        }));
+        runner.AddOutput(foldBuffer);
 
         var runOptions = new RunOptions();
         runOptions.SetOption(new ExternalScriptRunnerOptions
@@ -194,7 +169,7 @@ public class HeadlessScriptExecutionService(
                         Status = isTimeout ? HeadlessRunResult.StatusTimeout : HeadlessRunResult.StatusCancelled,
                         Success = false,
                         DurationMs = runResult.DurationMs,
-                        Output = output,
+                        Output = foldBuffer.Output,
                         Error = isTimeout ? $"Execution timed out after {timeoutMs}ms." : null
                     };
                 }
@@ -209,7 +184,7 @@ public class HeadlessScriptExecutionService(
             {
                 Status = HeadlessRunResult.StatusFailed,
                 Success = false,
-                Output = output,
+                Output = foldBuffer.Output,
                 Error = ex.Message
             };
         }
@@ -227,10 +202,10 @@ public class HeadlessScriptExecutionService(
             Status = status,
             Success = runResult.IsScriptCompletedSuccessfully,
             DurationMs = runResult.DurationMs,
-            Output = output,
-            CompilationErrors = errors.Count > 0 ? errors : null,
-            Error = !runResult.IsScriptCompletedSuccessfully && errors.Count > 0
-                ? string.Join(Environment.NewLine, errors)
+            Output = foldBuffer.Output,
+            CompilationErrors = foldBuffer.Errors.Count > 0 ? foldBuffer.Errors : null,
+            Error = !runResult.IsScriptCompletedSuccessfully && foldBuffer.Errors.Count > 0
+                ? string.Join(Environment.NewLine, foldBuffer.Errors)
                 : null
         };
     }

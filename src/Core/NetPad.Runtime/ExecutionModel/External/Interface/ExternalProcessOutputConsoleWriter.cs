@@ -8,7 +8,7 @@ namespace NetPad.ExecutionModel.External.Interface;
 /// </summary>
 internal class ExternalProcessOutputConsoleWriter(bool plainText, bool minimal) : IExternalProcessOutputWriter
 {
-    public Task WriteResultAsync(object? output, DumpOptions? options = null)
+    public Task WriteResultAsync(object? output, DumpOptions? options = null, string? outputId = null, bool isUpdate = false)
     {
         options ??= new DumpOptions();
 

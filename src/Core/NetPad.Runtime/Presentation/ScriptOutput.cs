@@ -23,6 +23,9 @@ public record ScriptOutput(
     string? Body,
     ScriptOutputFormat Format = ScriptOutputFormat.Text)
 {
+    public string? OutputId { get; init; }
+    public bool IsUpdate { get; init; }
+
     public ScriptOutput(ScriptOutputKind kind, string? body, ScriptOutputFormat format = ScriptOutputFormat.Text)
         : this(kind, 0, body, format)
     {

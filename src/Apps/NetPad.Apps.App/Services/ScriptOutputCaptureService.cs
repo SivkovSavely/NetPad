@@ -15,8 +15,6 @@ namespace NetPad.Services;
 /// </summary>
 public sealed class ScriptOutputCaptureService : IDisposable
 {
-    private const int MaxOutputSize = 100 * 1024; // ~100KB, matching the headless path
-
     private static readonly TimeSpan _bufferTtl = TimeSpan.FromMinutes(10);
     private readonly ConcurrentDictionary<Guid, CaptureContext> _captures = new();
     private readonly System.Timers.Timer _evictionTimer;
@@ -181,42 +179,21 @@ public sealed class ScriptOutputCaptureService : IDisposable
 
     private class CaptureContext
     {
-        private int _totalOutputSize;
-        private bool _outputTruncated;
-
         public CaptureContext(ScriptEnvironment environment)
         {
             Environment = environment;
-            Writer = new ActionOutputWriter<object>((output, _) =>
-            {
-                if (_outputTruncated || output is not ScriptOutput so) return;
-
-                lock (this)
-                {
-                    if (so.Kind == ScriptOutputKind.Error)
-                    {
-                        Errors.Add(so.Body ?? string.Empty);
-                        return;
-                    }
-
-                    _totalOutputSize += so.Body?.Length ?? 0;
-                    if (_totalOutputSize > MaxOutputSize)
-                    {
-                        _outputTruncated = true;
-                        Output.Add(new ScriptOutput(ScriptOutputKind.Result, "[Output truncated: exceeded 100KB limit]"));
-                        return;
-                    }
-
-                    Output.Add(so);
-                }
-            });
+            Buffer = new ScriptOutputFoldBuffer();
         }
 
         public ScriptEnvironment Environment { get; }
-        public IOutputWriter<object> Writer { get; }
+        public ScriptOutputFoldBuffer Buffer { get; }
+
+        /// <summary>The output writer that folds updates and enforces the max output size.</summary>
+        public IOutputWriter<object> Writer => Buffer;
+
         public DateTime CreatedAt { get; } = DateTime.UtcNow;
-        public List<ScriptOutput> Output { get; } = [];
-        public List<string> Errors { get; } = [];
+        public List<ScriptOutput> Output => Buffer.Output;
+        public List<string> Errors => Buffer.Errors;
         public string? FinalStatus { get; set; }
         public double DurationMs { get; set; }
         public TaskCompletionSource CompletionSource { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

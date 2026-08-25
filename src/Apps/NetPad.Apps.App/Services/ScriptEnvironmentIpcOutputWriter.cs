@@ -41,8 +41,16 @@ public sealed record ScriptEnvironmentIpcOutputWriter : IOutputWriter<object>, I
     private readonly ConcurrentQueue<IpcMessage> _sendMessageQueue = new();
     private readonly Timer _sendMessageQueueTimer;
     private int _userOutputMessagesSentThisRun;
+    private int _updateMessagesSentThisRun;
     private bool _sentOutputLimitReachedMessage;
     private readonly Lock _sendOutputLimitReachedMessageLock = new();
+
+    /// <summary>
+    /// Set when a message that carried an order is dropped. Dropped orders leave a permanent gap
+    /// in the output sequence, so all messages sent afterwards must go out unordered or the
+    /// frontend would wait forever for the missing order before rendering them.
+    /// </summary>
+    private int _hasDroppedOrderedMessage;
 
     public ScriptEnvironmentIpcOutputWriter(
         ScriptEnvironment scriptEnvironment,
@@ -89,7 +97,9 @@ public sealed record ScriptEnvironmentIpcOutputWriter : IOutputWriter<object>, I
 
                 _sendMessageQueue.Clear();
                 _userOutputMessagesSentThisRun = 0;
+                _updateMessagesSentThisRun = 0;
                 _sentOutputLimitReachedMessage = false;
+                _hasDroppedOrderedMessage = 0;
 
                 // Swap in a new CTS for this run then dispose old one
                 _ctsAccessor.Update(new CancellationTokenSource());
@@ -177,7 +187,8 @@ public sealed record ScriptEnvironmentIpcOutputWriter : IOutputWriter<object>, I
                     break;
                 }
 
-                if (HasReachedUserOutputMessageLimitForThisRun())
+                var isMutation = so.IsUpdate && so.OutputId is not null;
+                if (!isMutation && HasReachedUserOutputMessageLimitForThisRun())
                 {
                     if (_sentOutputLimitReachedMessage) return;
 
@@ -197,7 +208,33 @@ public sealed record ScriptEnvironmentIpcOutputWriter : IOutputWriter<object>, I
                     return;
                 }
 
-                Interlocked.Increment(ref _userOutputMessagesSentThisRun);
+                if (isMutation)
+                {
+                    if (Interlocked.Increment(ref _updateMessagesSentThisRun) > MaxUserOutputMessagesPerRun)
+                    {
+                        Interlocked.Exchange(ref _hasDroppedOrderedMessage, 1);
+                        return;
+                    }
+
+                    // Ordinary results past the limit are dropped, so the frontend would wait forever for
+                    // their sequential order before rendering this update. Emit it unordered instead.
+                    if (HasReachedUserOutputMessageLimitForThisRun())
+                    {
+                        so = so with { Order = 0 };
+                    }
+                }
+                else
+                {
+                    Interlocked.Increment(ref _userOutputMessagesSentThisRun);
+                }
+
+                // If any ordered message was dropped earlier in this run, its order will never arrive;
+                // emit this message unordered so the frontend does not park waiting for that gap.
+                if (Volatile.Read(ref _hasDroppedOrderedMessage) == 1 && so.Order != 0)
+                {
+                    so = so with { Order = 0 };
+                }
+
                 QueueMessage(so, true);
                 break;
 
