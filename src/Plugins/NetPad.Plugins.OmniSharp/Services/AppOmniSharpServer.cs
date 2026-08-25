@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using OmniSharp.Models.Events;
@@ -88,7 +89,13 @@ public class AppOmniSharpServer(
                 .GetUserVisibleAssemblies()
                 .Select(a => new AssemblyFileReference(a)));
 
-        await Project.RestoreAsync();
+        var restoreResult = await Project.RestoreAsync();
+        if (!restoreResult.Succeeded)
+        {
+            _logger.LogError(
+                "Restoring the OmniSharp script project failed. Editor services may not work correctly.\n{Output}\n{Error}",
+                restoreResult.Output, restoreResult.Error);
+        }
 
         // Write initial code to disk so OmniSharp picks it up during project load,
         // rather than needing a post-load buffer update round-trip.
@@ -214,18 +221,34 @@ public class AppOmniSharpServer(
         var dotNetRootDir = dotNetInfo.LocateDotNetRootDirectoryForFramework(
             environment.Script.Config.TargetFrameworkVersion) ?? dotNetInfo.LocateDotNetRootDirectory();
 
+        // Pin OmniSharp's design-time evaluation to the SDK that matches the script's target
+        // framework major version via MSBuildSDKsPath. OmniSharp's locator always registers the
+        // machine's newest MSBuild instance (ignoring MsBuild:MSBuildPath), which may be a preview
+        // whose SDK targets evaluate the script project without any framework references, producing
+        // bogus CS0518/CS0012 diagnostics in the editor. Redirecting the SDK targets at the
+        // TFM-matching SDK keeps the engine but evaluates with the correct targets.
+        Dictionary<string, string?>? environmentVariables = null;
+        var msBuildPath = GetMsBuildPathForScriptTargetFramework();
+        if (msBuildPath != null)
+        {
+            environmentVariables = new Dictionary<string, string?>
+            {
+                ["MSBuildSDKsPath"] = Path.Combine(msBuildPath, "Sdks")
+            };
+        }
+
         var omniSharpServer = omniSharpServerFactory.CreateStdioServerFromNewProcess(
             executablePath!,
             Project.ProjectDirectoryPath.Path,
             args,
-            dotNetRootDir);
+            dotNetRootDir,
+            environmentVariables);
 
         _logger.LogDebug(
             "Starting omnisharp server\nFrom path: {OmniSharpExePath}\nProject dir: {ProjDirPath}\nWith args: {Args}",
             executablePath,
             Project.ProjectDirectoryPath,
             args);
-
         await omniSharpServer.StartAsync();
 
         omniSharpServer.OnProcessUnexpectedExit = HandleProcessUnexpectedExit;
@@ -322,6 +345,35 @@ public class AppOmniSharpServer(
         }
 
         await eventBus.PublishAsync(new OmniSharpServerStartedEvent(this));
+    }
+
+    /// <summary>
+    /// Locates the installed SDK directory matching the script's target framework major version
+    /// (preferring stable releases), to pin OmniSharp's design-time evaluation to via MSBuildSDKsPath.
+    /// </summary>
+    private string? GetMsBuildPathForScriptTargetFramework()
+    {
+        try
+        {
+            var targetMajor = environment.Script.Config.TargetFrameworkVersion.GetMajorVersion();
+
+            var sdk = dotNetInfo.GetDotNetSdkVersions()
+                .Where(v => v.Version.Major == targetMajor)
+                .OrderByDescending(v => v.Version.IsPrerelease)
+                .ThenByDescending(v => v.Version)
+                .FirstOrDefault();
+
+            if (sdk?.DotNetRootDirectory == null)
+                return null;
+
+            var msBuildPath = Path.Combine(sdk.DotNetRootDirectory, "sdk", sdk.Version.ToString());
+            return Directory.Exists(msBuildPath) ? msBuildPath : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not locate an SDK for the script's target framework; OmniSharp will use its default MSBuild");
+            return null;
+        }
     }
 
     private async Task StopOmniSharpServerAsync()
@@ -467,7 +519,13 @@ public class AppOmniSharpServer(
             if (ev.Script.Id != environment.Script.Id) return;
 
             await Project.UpdateTargetFrameworkAsync(ev.NewVersion);
-            await Project.RestoreAsync();
+            var restoreResult = await Project.RestoreAsync();
+        if (!restoreResult.Succeeded)
+        {
+            _logger.LogError(
+                "Restoring the OmniSharp script project failed. Editor services may not work correctly.\n{Output}\n{Error}",
+                restoreResult.Output, restoreResult.Error);
+        }
 
             // OmniSharp must be restarted because DOTNET_ROOT (set at process startup) may
             // point to a different .NET installation for the new target framework.

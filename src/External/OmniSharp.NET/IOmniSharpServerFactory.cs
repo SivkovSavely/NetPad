@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using OmniSharp.Stdio;
 
@@ -16,11 +17,13 @@ namespace OmniSharp
         /// <param name="projectPath">The path to the project file or directory.</param>
         /// <param name="additionalArgs">Additional arguments to be passed to the spawned OmniSharp process.</param>
         /// <param name="dotNetSdkRootDirectoryPath">The root directory path for the .NET SDK installation.</param>
+        /// <param name="environmentVariables">Additional environment variables to set on the spawned process.</param>
         IOmniSharpStdioServer CreateStdioServerFromNewProcess(
             string executablePath,
             string projectPath,
             string? additionalArgs,
-            string? dotNetSdkRootDirectoryPath);
+            string? dotNetSdkRootDirectoryPath,
+            IReadOnlyDictionary<string, string?>? environmentVariables = null);
 
         /// <summary>
         /// Creates a stdio OmniSharp server from an existing process. Standard input and output must already be redirected.

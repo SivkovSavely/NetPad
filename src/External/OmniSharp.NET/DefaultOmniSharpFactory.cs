@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,12 +23,14 @@ namespace OmniSharp
         /// <param name="projectPath">An absolute path to a directory containing a project or a solution file.</param>
         /// <param name="additionalArgs">Additional arguments to pass to the OmniSharp executable. Separated by spaces.</param>
         /// <param name="dotNetSdkRootDirectoryPath">The root directory path for the .NET SDK installation.</param>
+        /// <param name="environmentVariables">Additional environment variables to set on the spawned process.</param>
         /// <exception cref="ArgumentNullException">Thrown if required parameters are null.</exception>
         public IOmniSharpStdioServer CreateStdioServerFromNewProcess(
             string executablePath,
             string projectPath,
             string? additionalArgs,
-            string? dotNetSdkRootDirectoryPath)
+            string? dotNetSdkRootDirectoryPath,
+            IReadOnlyDictionary<string, string?>? environmentVariables = null)
         {
             if (executablePath == null)
                 throw new ArgumentNullException(nameof(executablePath));
@@ -42,7 +45,8 @@ namespace OmniSharp
                 executablePath,
                 args.Trim(),
                 dotNetSdkRootDirectoryPath,
-                projectPath);
+                projectPath,
+                environmentVariables);
 
             var accessor = new OmniSharpServerStdioProcessAccessor(config);
 

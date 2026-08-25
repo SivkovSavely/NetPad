@@ -58,6 +58,14 @@ namespace OmniSharp.Stdio
                         : $"{dotNetSdkRootDirPath}{pathSeparator}{existingPath}";
                 }
 
+                if (_configuration.EnvironmentVariables != null)
+                {
+                    foreach (var (key, value) in _configuration.EnvironmentVariables)
+                    {
+                        environmentVariables[key] = value;
+                    }
+                }
+
                 _processHandler = new ProcessHandler(
                     exePath,
                     exeArgs,

@@ -26,6 +26,25 @@ public class DiagnosticsEventsBackgroundService(
             var server = ev.AppOmniSharpServer;
             var scriptId = server.ScriptId;
 
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Diagnostic events are only emitted by a server instance after it receives this
+                    // request. The frontend sends it when an editor attaches, which happens once per
+                    // page load; servers started afterwards (restarts, auto-restarts) would otherwise
+                    // never emit diagnostics again and stale editor squiggles would persist.
+                    await server.OmniSharpServer.SendAsync(new OmniSharpDiagnosticRequest
+                    {
+                        FileName = server.Project.UserProgramFilePath
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to start diagnostics on OmniSharp server for script {ScriptId}", scriptId);
+                }
+            });
+
             server.OmniSharpServer.SubscribeToEvent("Diagnostic", async node =>
             {
                 var body = node["Body"];
