@@ -152,6 +152,8 @@ export class OutputPane extends Pane {
                 model = new OutputModel(active, this.settings);
                 model.resultsDumpContainer.onExpandOnDemand =
                     outputId => void this.scriptService.expandOnDemand(active.script.id, outputId);
+                model.resultsDumpContainer.onNavigateToSource =
+                    (path, line) => void this.session.openByPath(path).catch(() => undefined);
                 this.outputModels.set(active.script.id, model);
             }
 

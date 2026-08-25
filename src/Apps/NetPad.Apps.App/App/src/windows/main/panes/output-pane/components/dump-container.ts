@@ -2,6 +2,7 @@ import {ScriptOutput, Settings} from "@application";
 import {DisposableCollection, IDisposable, KeyCode, Util} from "@common";
 import {ResultControls} from "./result-controls";
 import {NavigationControls} from "./navigation-controls";
+import {linkifySourceLocations, parseSourceLocation} from "./source-linkify";
 import "highlight.js/styles/monokai.min.css";
 import {UiUtil} from "@common/utils/ui-util";
 
@@ -15,6 +16,9 @@ export class DumpContainer implements IDisposable {
 
     // Invoked when the user clicks an on-demand placeholder (Util.OnDemand) rendered in this container
     public onExpandOnDemand?: (outputId: string) => void;
+
+    // Invoked when the user clicks a source location link in dumped error output
+    public onNavigateToSource?: (path: string, line?: number, column?: number) => void;
 
     private renderQueue: Element[] = [];
     private lastRenderedOutput?: Element | null;
@@ -53,6 +57,15 @@ export class DumpContainer implements IDisposable {
             const target = ev.target instanceof Element ? ev.target.closest("[data-on-demand-id]") : null;
             if (target) {
                 this.onExpandOnDemand?.(target.getAttribute("data-on-demand-id")!);
+                return;
+            }
+
+            const sourceLink = ev.target instanceof Element ? ev.target.closest("[data-source-path]") : null;
+            if (sourceLink) {
+                const location = parseSourceLocation(sourceLink);
+                if (location) {
+                    this.onNavigateToSource?.(location.path, location.line, location.column);
+                }
             }
         };
         this.element.addEventListener("click", onClick);
@@ -286,6 +299,12 @@ export class DumpContainer implements IDisposable {
 
                         first.replaceWith(spanOne, spanTwo);
                     }
+                }
+
+                // Make file:line references in error output navigable when a navigation
+                // callback is wired by the host.
+                if (this.onNavigateToSource) {
+                    linkifySourceLocations(group, this.onNavigateToSource);
                 }
             } else if (group.lastElementChild?.tagName.toLowerCase() === "script") {
                 // Script tags cannot be injected as is, they must be recreated and appended to the DOM for
