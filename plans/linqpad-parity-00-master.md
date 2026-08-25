@@ -95,35 +95,41 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[B]` blocked (with rea
 - [x] `DumpTell`
 - [x] `DumpAsync(IAsyncEnumerable<T>)`
 
-### Script-facing/host APIs (plan 02)
-- [ ] `Hyperlinq`
-- [ ] `Util.Markdown`
-- [ ] `Util.Latex`
-- [ ] `Util.JS.Run`
-- [ ] `Util.JS.Eval`
-- [ ] `Util.HtmlHead`
-- [ ] `Util.ClearResults`
-- [ ] `Util.HideEditor`
-- [ ] `Util.HideResults`
-- [ ] `Util.AutoScrollResults`
-- [ ] `Util.KeepRunning`
-- [ ] `QueryCancelToken`
-- [ ] Cancel-and-Execute behavior
-- [ ] richer `Util.Run` with child-result/output capture
-- [ ] `Util.TransactionIsolationLevel`
-- [ ] `Util.ToCsvString`
-- [ ] `Util.WriteCsv`
-- [ ] `Util.CreateXhtmlWriter`
-- [ ] `.ToSpreadsheet()`
-- [ ] workbook/multiple sheets
-- [ ] `Worksheet`
-- [ ] `Cell`
-- [ ] formulas
-- [ ] `Util.GetMyScripts`
-- [ ] `Uncapsulate()`
-- [ ] `Util.GetPassword`
-- [ ] named result panels
-- [ ] `DumpToNewPanel` equivalent
+### Script-facing/host APIs (plan 02) — COMPLETE
+Implemented across commits recorded in plan 02's progress log. Notable documented differences:
+- `Util.JS` evaluates in the main window's global scope (the results view host); external output windows reply with an error.
+- `Util.TransactionIsolationLevel` applies to SQL-kind scripts via `SET TRANSACTION ISOLATION LEVEL` on the data connection and rejects too-late changes; EF program scripts can read the property for their own transactions.
+- Spreadsheet writer uses `DocumentFormat.OpenXml` (the one justified dependency); formulas are stored un-evaluated.
+- `Util.GetPassword` reads from the existing user-secrets store; when absent it prompts via the input channel with masking and does NOT persist the entered value.
+- Named panels render in the app's output pane tabs; the pop-out output window ignores them, and headless capture flattens panels sequentially with headings.
+- [x] `Hyperlinq`
+- [x] `Util.Markdown`
+- [x] `Util.Latex`
+- [x] `Util.JS.Run`
+- [x] `Util.JS.Eval`
+- [x] `Util.HtmlHead`
+- [x] `Util.ClearResults`
+- [x] `Util.HideEditor`
+- [x] `Util.HideResults`
+- [x] `Util.AutoScrollResults`
+- [x] `Util.KeepRunning`
+- [x] `QueryCancelToken`
+- [x] Cancel-and-Execute behavior
+- [x] richer `Util\.Run` with child-result/output capture
+- [x] `Util.TransactionIsolationLevel`
+- [x] `Util.ToCsvString`
+- [x] `Util.WriteCsv`
+- [x] `Util.CreateXhtmlWriter`
+- [x] `.ToSpreadsheet\(\)`
+- [x] workbook/multiple sheets
+- [x] `Worksheet`
+- [x] `Cell`
+- [x] formulas
+- [x] `Util.GetMyScripts`
+- [x] `Uncapsulate()`
+- [x] `Util.GetPassword`
+- [x] named result panels
+- [x] `DumpToNewPanel` equivalent
 
 ### Interactive results (plan 03)
 - [ ] generic live `Control`

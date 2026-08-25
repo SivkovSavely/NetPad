@@ -1856,6 +1856,8 @@ export interface IScriptsApiClient {
 
     getScriptsInfo(name: string | null | undefined, signal?: AbortSignal | undefined): Promise<ScriptInfo[]>;
 
+    invokeScriptAction(id: string, actionId: string, signal?: AbortSignal | undefined): Promise<void>;
+
     getScript(id: string, signal?: AbortSignal | undefined): Promise<Script>;
 
     delete(id: string, signal?: AbortSignal | undefined): Promise<void>;
@@ -2852,8 +2854,40 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
         return Promise.resolve<FileResponse | null>(null as any);
     }
 
-    expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/scripts/{id}/on-demand/expand?";
+    invokeScriptAction(id: string, actionId: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/actions/{actionId}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace("{actionId}", encodeURIComponent("" + actionId));
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {}
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processInvokeScriptAction(_response);
+        });
+    }
+
+    protected processInvokeScriptAction(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal): Promise<void> {        let url_ = this.baseUrl + "/scripts/{id}/on-demand/expand?";
         if (id === undefined || id === null)
             throw new Error("The parameter 'id' must be defined.");
         url_ = url_.replace("{id}", encodeURIComponent("" + id));
@@ -5784,6 +5818,7 @@ export class ScriptOutput implements IScriptOutput {
     format!: ScriptOutputFormat;
     outputId?: string | undefined;
     isUpdate!: boolean;
+    panelName?: string | undefined;
 
     constructor(data?: IScriptOutput) {
         if (data) {
@@ -5802,6 +5837,7 @@ export class ScriptOutput implements IScriptOutput {
             this.format = _data["format"];
             this.outputId = _data["outputId"];
             this.isUpdate = _data["isUpdate"];
+            this.panelName = _data["panelName"];
         }
     }
 
@@ -5838,11 +5874,235 @@ export interface IScriptOutput {
     format: ScriptOutputFormat;
     outputId?: string | undefined;
     isUpdate: boolean;
+    panelName?: string | undefined;
 }
 
 export type ScriptOutputKind = "Result" | "Sql" | "Error";
 
 export type ScriptOutputFormat = "Text" | "Html" | "Json";
+
+export type ResultHostCommand =
+    | "ClearResults"
+    | "HideEditor"
+    | "ShowEditor"
+    | "HideResults"
+    | "ShowResults"
+    | "AutoScrollResults"
+    | "OpenPanel"
+    | "RemovePanel";
+
+export interface IResultHostCommandEvent {
+    requestId: string;
+    scriptId: string;
+    command: ResultHostCommand;
+    payloadJson?: string | undefined;
+}
+
+export class ResultHostCommandEvent implements IResultHostCommandEvent {
+    scriptId!: string;
+    command!: ResultHostCommand;
+    payloadJson?: string | undefined;
+    requestId!: string;
+
+    constructor(data?: IResultHostCommandEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            this.command = _data["command"];
+            this.payloadJson = _data["payloadJson"];
+            this.requestId = _data["requestId"];
+        }
+    }
+
+    static fromJS(data: any): ResultHostCommandEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new ResultHostCommandEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        data["command"] = this.command;
+        data["payloadJson"] = this.payloadJson;
+        data["requestId"] = this.requestId;
+        return data;
+    }
+
+    clone(): ResultHostCommandEvent {
+        const json = this.toJSON();
+        let result = new ResultHostCommandEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptHtmlHeadEntry {
+    type: number;
+    content: string;
+}
+
+export class ScriptHtmlHeadEntry implements IScriptHtmlHeadEntry {
+    type!: number;
+    content!: string;
+
+    constructor(data?: IScriptHtmlHeadEntry) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.content = _data["content"];
+        }
+    }
+
+    static fromJS(data: any): ScriptHtmlHeadEntry {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptHtmlHeadEntry();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["content"] = this.content;
+        return data;
+    }
+
+    clone(): ScriptHtmlHeadEntry {
+        const json = this.toJSON();
+        let result = new ScriptHtmlHeadEntry();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptHtmlHeadChangedEvent {
+    requestId: string;
+    scriptId: string;
+    entries: ScriptHtmlHeadEntry[];
+}
+
+export class ScriptHtmlHeadChangedEvent implements IScriptHtmlHeadChangedEvent {
+    scriptId!: string;
+    entries!: ScriptHtmlHeadEntry[];
+    requestId!: string;
+
+    constructor(data?: IScriptHtmlHeadChangedEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.entries = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            if (Array.isArray(_data["entries"])) {
+                this.entries = [] as any;
+                for (let item of _data["entries"])
+                    this.entries!.push(ScriptHtmlHeadEntry.fromJS(item));
+            } else {
+                this.entries = <any>_data["entries"];
+            }
+            this.requestId = _data["requestId"];
+        }
+    }
+
+    static fromJS(data: any): ScriptHtmlHeadChangedEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptHtmlHeadChangedEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        if (this.entries && this.entries.constructor === Array) {
+            data["entries"] = [];
+            for (let item of this.entries)
+                data["entries"].push(item.toJSON());
+        }
+        data["requestId"] = this.requestId;
+        return data;
+    }
+
+    clone(): ScriptHtmlHeadChangedEvent {
+        const json = this.toJSON();
+        let result = new ScriptHtmlHeadChangedEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IJsEvalResponse {
+    resultJson?: string | undefined;
+    error?: string | undefined;
+}
+
+export class JsEvalResponse implements IJsEvalResponse {
+    resultJson?: string | undefined;
+    error?: string | undefined;
+
+    constructor(data?: IJsEvalResponse) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.resultJson = _data["resultJson"];
+            this.error = _data["error"];
+        }
+    }
+
+    static fromJS(data: any): JsEvalResponse {
+        data = typeof data === 'object' ? data : {};
+        let result = new JsEvalResponse();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["resultJson"] = this.resultJson;
+        data["error"] = this.error;
+        return data;
+    }
+
+    clone(): JsEvalResponse {
+        const json = this.toJSON();
+        let result = new JsEvalResponse();
+        result.init(json);
+        return result;
+    }
+}
 
 export class HeadlessRunRequest implements IHeadlessRunRequest {
     code!: string;
@@ -9602,6 +9862,7 @@ export interface IPromptUserCommand extends ICommandOfString {
 
 export class PromptUserForInputCommand extends CommandOfString implements IPromptUserForInputCommand {
     scriptId!: string;
+    isMasked?: boolean | undefined;
 
     constructor(data?: IPromptUserForInputCommand) {
         super(data);
@@ -9611,6 +9872,7 @@ export class PromptUserForInputCommand extends CommandOfString implements IPromp
         super.init(_data);
         if (_data) {
             this.scriptId = _data["scriptId"];
+            this.isMasked = _data["isMasked"];
         }
     }
 
@@ -9638,6 +9900,7 @@ export class PromptUserForInputCommand extends CommandOfString implements IPromp
 
 export interface IPromptUserForInputCommand extends ICommandOfString {
     scriptId: string;
+    isMasked?: boolean | undefined;
 }
 
 export class AlertUserAboutMissingAppDependencies extends Command implements IAlertUserAboutMissingAppDependencies {
@@ -10459,4 +10722,56 @@ function throwException(message: string, status: number, response: string, heade
         throw result;
     else
         throw new ApiException(message, status, response, headers, null);
+}
+
+export interface IRunJsInResultsCommand extends ICommand {
+    scriptId: string;
+    correlationId: string;
+    code: string;
+    timeoutMs: number;
+}
+
+export class RunJsInResultsCommand extends Command implements IRunJsInResultsCommand {
+    scriptId!: string;
+    correlationId!: string;
+    code!: string;
+    timeoutMs!: number;
+
+    constructor(data?: IRunJsInResultsCommand) {
+        super(data);
+    }
+
+    override init(_data?: any) {
+        super.init(_data);
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            this.correlationId = _data["correlationId"];
+            this.code = _data["code"];
+            this.timeoutMs = _data["timeoutMs"];
+        }
+    }
+
+    static override fromJS(data: any): RunJsInResultsCommand {
+        data = typeof data === 'object' ? data : {};
+        let result = new RunJsInResultsCommand();
+        result.init(data);
+        return result;
+    }
+
+    override toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        data["correlationId"] = this.correlationId;
+        data["code"] = this.code;
+        data["timeoutMs"] = this.timeoutMs;
+        super.toJSON(data);
+        return data;
+    }
+
+    clone(): RunJsInResultsCommand {
+        const json = this.toJSON();
+        let result = new RunJsInResultsCommand();
+        result.init(json);
+        return result;
+    }
 }

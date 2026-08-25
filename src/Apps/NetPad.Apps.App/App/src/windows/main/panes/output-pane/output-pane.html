@@ -1,5 +1,6 @@
 ﻿<import from="./components/results-view/results-view"></import>
 <import from="./components/sql-view/sql-view"></import>
+<import from="./components/panel-view"></import>
 
 <template tabindex="0">
     <pane-toolbar>
@@ -9,6 +10,13 @@
                  click.trigger="activeTab = tab.name"
                  title.bind="tab.keyBinding.asString">
                 ${tab.name}
+            </div>
+
+            <div repeat.for="panelName of current?.panelNames"
+                 class="tab-button ${activeTab === panelName ? 'active' : ''}"
+                 click.trigger="activeTab = panelName"
+                 title.bind="panelName">
+                ${panelName}
             </div>
         </div>
 
@@ -30,6 +38,12 @@
     <div class="flex-fill overflow-auto d-flex">
         <results-view model.bind="current" show.bind="activeTab === 'Results'"></results-view>
         <sql-view model.bind="current" show.bind="activeTab === 'SQL'"></sql-view>
+
+        <panel-view model.bind="current"
+                    name.bind="panelName"
+                    show.bind="activeTab === panelName"
+                    class="flex-fill"
+                    repeat.for="panelName of current?.panelNames"></panel-view>
 
         <find-text-box component.ref="findTextBox"></find-text-box>
     </div>

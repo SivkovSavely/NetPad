@@ -16,6 +16,7 @@ export enum ShortcutIds {
     saveDocument = "shortcut.documents.save",
     saveAllDocuments = "shortcut.documents.saveall",
     runDocument = "shortcut.documents.run",
+    cancelAndExecute = "shortcut.documents.cancelandexecute",
     openDocumentProperties = "shortcut.documents.properties",
     openSettings = "shortcut.settings.open",
     openOutput = "shortcut.output.open",
@@ -137,6 +138,33 @@ export const BuiltinShortcuts = [
     new Shortcut(ShortcutIds.runDocument, "Run")
         .withKey(KeyCode.F5)
         .firesEvent(async () => new (await import("@application/scripts/run-script-command")).RunScriptCommand())
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.cancelAndExecute, "Cancel and Execute")
+        .withCtrlKey()
+        .withShiftKey()
+        .withKey(KeyCode.F5)
+        .hasAction(async (ctx) => {
+            const session = ctx.session;
+            const environment = session.active;
+            if (!environment) return;
+
+            const scriptService = ctx.container.get(IScriptService);
+
+            if (environment.status === "Running") {
+                await scriptService.stop(environment.script.id, false);
+
+                // Wait for the environment to leave the Running state before re-running.
+                const deadline = Date.now() + 15_000;
+                while (environment.status === "Running" && Date.now() < deadline) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+
+            await scriptService.run(environment.script.id, new (await import("@application")).RunOptions());
+        })
         .captureDefaultKeyCombo()
         .configurable()
         .enabled(),

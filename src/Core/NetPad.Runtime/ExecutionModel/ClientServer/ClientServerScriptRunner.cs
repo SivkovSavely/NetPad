@@ -240,22 +240,48 @@ public partial class ClientServerScriptRunner : IScriptRunner
 
     public Task StopScriptAsync()
     {
+        ScriptRun? run;
+
         lock (_runLock)
         {
             _userRequestedStop = true;
-            if (_currentRun != null)
-            {
-                if (!_currentRun.IsComplete)
-                {
-                    _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Stopping...");
-                }
+            run = _currentRun;
 
-                _currentRun.Cancel();
-                return _currentRun.Task;
+            if (run == null || run.IsComplete)
+            {
+                return Task.CompletedTask;
             }
+
+            _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Stopping...");
+
+            // First request cooperative cancellation; the script-host cancels the script's
+            // QueryCancelToken so it can stop gracefully (ex. release KeepRunning leases).
+            _scriptHostProcessManager.Send(new CancelScriptMessage());
         }
 
-        return Task.CompletedTask;
+        return StopAfterGracePeriodAsync(run);
+    }
+
+    private const int SoftCancellationGracePeriodMs = 5_000;
+
+    private async Task StopAfterGracePeriodAsync(ScriptRun run)
+    {
+        var completed = await Task.WhenAny(run.Task, Task.Delay(SoftCancellationGracePeriodMs))
+            .ConfigureAwait(false);
+
+        if (completed == run.Task)
+        {
+            return;
+        }
+
+        // The script did not stop cooperatively in time — hard stop.
+        lock (_runLock)
+        {
+            if (_currentRun == run && !run.IsComplete)
+            {
+                run.Cancel();
+            }
+        }
     }
 
     /// <summary>
@@ -271,13 +297,25 @@ public partial class ClientServerScriptRunner : IScriptRunner
             _eventBus.PublishAsync(new ScriptMemCacheItemInfoChangedEvent(_script.Id, msg.Items)));
         ipcGateway.On<RunScriptFromPathMessage>(msg =>
             _eventBus.PublishAsync(new RunScriptRequestedEvent(msg.Path)));
+        ipcGateway.On<RequestJsEvalMessage>(msg =>
+            _eventBus.PublishAsync(new JsEvalRequestedEvent(_script.Id, msg.CorrelationId, msg.Code, msg.TimeoutMs)));
+        ipcGateway.On<ResultHostCommandMessage>(msg =>
+            _eventBus.PublishAsync(new ResultHostCommandEvent(_script.Id, msg.Command, msg.PayloadJson)));
+        ipcGateway.On<ScriptHtmlHeadMessage>(msg =>
+            _eventBus.PublishAsync(new ScriptHtmlHeadChangedEvent(_script.Id, msg.Entries)));
+        ipcGateway.On<RunChildScriptMessage>(msg =>
+            _eventBus.PublishAsync(new ChildScriptRunRequestedEvent(_script.Id, msg.CorrelationId, msg.Path)));
     }
 
-    private async void OnRequestUserInputMessage(RequestUserInputMessage _)
+    private async void OnRequestUserInputMessage(RequestUserInputMessage message)
     {
         try
         {
             var run = _currentRun;
+
+            // Let consumers know input characteristics (ex. masking) before they are asked to read input.
+            await _eventBus.PublishAsync(new ScriptUserInputRequestedEvent(_script.Id, message.IsMasked));
+
             string? input = null;
             foreach (var inputReader in _externalInputReaders.ToArray())
             {
@@ -404,6 +442,17 @@ public partial class ClientServerScriptRunner : IScriptRunner
     public void ExpandOutput(string outputId)
     {
         _scriptHostProcessManager.Send(new ExpandOutputMessage(outputId));
+    }
+
+    public void InvokeScriptAction(string actionId)
+    {
+        _scriptHostProcessManager.Send(new InvokeScriptActionMessage(actionId));
+    }
+
+    public void SendToScriptHost(object message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        _scriptHostProcessManager.Send(message);
     }
 
     /// <summary>

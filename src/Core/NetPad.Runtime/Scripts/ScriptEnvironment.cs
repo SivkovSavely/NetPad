@@ -318,6 +318,16 @@ public class ScriptEnvironment : IDisposable, IAsyncDisposable
         _runner.ExpandOutput(outputId);
     }
 
+    public void InvokeScriptAction(string actionId)
+    {
+        _runner.InvokeScriptAction(actionId);
+    }
+
+    public void SendToScriptHost(object message)
+    {
+        _runner.SendToScriptHost(message);
+    }
+
     private void SetStatus(ScriptStatus status)
     {
         if (status == Status)

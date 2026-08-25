@@ -92,6 +92,41 @@ public class HeadlessScriptExecutionService(
     }
 
     /// <summary>
+    /// Runs a script identified by its file path as an isolated child run
+    /// (used by the richer <c>Util.Run</c> child-runner API).
+    /// </summary>
+    public async Task<HeadlessRunResult> RunByPathAsync(string path, int? timeoutMs, CancellationToken cancellationToken)
+    {
+        Script? script;
+
+        try
+        {
+            script = await scriptRepository.GetAsync(path);
+        }
+        catch (Exception ex)
+        {
+            return new HeadlessRunResult
+            {
+                Status = HeadlessRunResult.StatusFailed,
+                Success = false,
+                Error = $"Could not load script at '{path}': {ex.Message}"
+            };
+        }
+
+        if (script == null)
+        {
+            return new HeadlessRunResult
+            {
+                Status = HeadlessRunResult.StatusFailed,
+                Success = false,
+                Error = $"No script found at '{path}'."
+            };
+        }
+
+        return await ExecuteScriptAsync(script, timeoutMs, cancellationToken);
+    }
+
+    /// <summary>
     /// Runs a script that is currently open in the GUI, capturing its output.
     /// The script executes through the normal GUI flow (status updates visible in the UI).
     /// </summary>

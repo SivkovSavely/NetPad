@@ -4,6 +4,7 @@ import {ResultControls} from "./result-controls";
 import {NavigationControls} from "./navigation-controls";
 import {linkifySourceLocations, parseSourceLocation} from "./source-linkify";
 import "highlight.js/styles/monokai.min.css";
+import "katex/dist/katex.min.css";
 import {UiUtil} from "@common/utils/ui-util";
 
 export class DumpContainer implements IDisposable {
@@ -17,6 +18,9 @@ export class DumpContainer implements IDisposable {
     // Invoked when the user clicks an on-demand placeholder (Util.OnDemand) rendered in this container
     public onExpandOnDemand?: (outputId: string) => void;
 
+    // Invoked when the user clicks a Hyperlinq action link rendered in this container
+    public onInvokeAction?: (actionId: string) => void;
+
     // Invoked when the user clicks a source location link in dumped error output
     public onNavigateToSource?: (path: string, line?: number, column?: number) => void;
 
@@ -29,6 +33,12 @@ export class DumpContainer implements IDisposable {
     private earlyMessagesOutputQueue: ScriptOutput[] = [];
     private scrollTop = 0;
     private disposables = new DisposableCollection();
+
+    // While auto-scroll is enabled, manual scrolling away from the bottom pauses following
+    // until the user scrolls back near the bottom.
+    private followPaused = false;
+
+    private scrollListenerAttachedTo?: HTMLElement;
 
     // Binding scopes created for mutable outputs, keyed by output id. When a mutable output is
     // replaced, the scope of the slot it replaces is disposed so its resources do not accumulate
@@ -60,6 +70,12 @@ export class DumpContainer implements IDisposable {
                 return;
             }
 
+            const actionLink = ev.target instanceof Element ? ev.target.closest("[data-netpad-action-id]") : null;
+            if (actionLink) {
+                this.onInvokeAction?.(actionLink.getAttribute("data-netpad-action-id")!);
+                return;
+            }
+
             const sourceLink = ev.target instanceof Element ? ev.target.closest("[data-source-path]") : null;
             if (sourceLink) {
                 const location = parseSourceLocation(sourceLink);
@@ -76,11 +92,44 @@ export class DumpContainer implements IDisposable {
     public attachedToDom() {
         if (this.element.parentElement) {
             this.element.parentElement.scrollTop = this.scrollTop;
+            this.attachScrollListener(this.element.parentElement as HTMLElement);
         }
     }
 
     public detachingFromDom() {
         this.scrollTop = this.element.parentElement?.scrollTop ?? 0;
+        this.detachScrollListener();
+    }
+
+    private attachScrollListener(scroller: HTMLElement) {
+        if (this.scrollListenerAttachedTo === scroller) return;
+
+        this.detachScrollListener();
+
+        scroller.addEventListener("scroll", this.onScrollerScroll);
+        this.scrollListenerAttachedTo = scroller;
+    }
+
+    private detachScrollListener() {
+        this.scrollListenerAttachedTo?.removeEventListener("scroll", this.onScrollerScroll);
+        this.scrollListenerAttachedTo = undefined;
+    }
+
+    private onScrollerScroll = () => {
+        if (!this.scrollOnOutput) {
+            this.followPaused = false;
+            return;
+        }
+
+        // Pause following while the user scrolls away from the bottom; resume when they return.
+        this.followPaused = !this.isNearBottom();
+    };
+
+    private isNearBottom(): boolean {
+        const scroller = this.scrollListenerAttachedTo ?? this.element.parentElement;
+        if (!scroller) return true;
+
+        return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
     }
 
     public getHtml() {
@@ -200,7 +249,7 @@ export class DumpContainer implements IDisposable {
         if (htmlToAppendToLastRenderedOutput) {
             this.lastRenderedOutput!.innerHTML = this.lastRenderedOutput!.innerHTML + htmlToAppendToLastRenderedOutput;
 
-            if (this.scrollOnOutput) {
+            if (this.scrollOnOutput && !this.followPaused) {
                 this.navigationControls.navigateBottom();
             }
 
@@ -266,6 +315,18 @@ export class DumpContainer implements IDisposable {
 
     private postProcessRenderedElements(elements: Element[]) {
         for (const group of elements) {
+            const markdownEl = group.querySelector(":scope > .netpad-markdown");
+            if (markdownEl) {
+                this.renderMarkdown(markdownEl);
+                continue;
+            }
+
+            const latexEl = group.querySelector(":scope > .netpad-latex");
+            if (latexEl) {
+                this.renderLatex(latexEl);
+                continue;
+            }
+
             if (group.classList.contains("code")) {
                 const codeEl = group.querySelector("code");
                 if (codeEl) {
@@ -319,8 +380,41 @@ export class DumpContainer implements IDisposable {
         }
     }
 
+    private renderMarkdown(el: Element) {
+        const text = el.textContent ?? "";
+
+        import("marked")
+            .then(m => m.marked)
+            .then(marked => {
+                let source = text;
+
+                // Raw HTML is escaped by default so untrusted markdown cannot inject markup.
+                if (el.getAttribute("data-allow-raw-html") !== "true") {
+                    source = source
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;");
+                }
+
+                el.innerHTML = marked.parse(source, {async: false}) as string;
+            })
+            .catch(err => console.error("Failed to render markdown", err));
+    }
+
+    private renderLatex(el: Element) {
+        const text = el.textContent ?? "";
+        const displayMode = el.getAttribute("data-display-mode") === "true";
+
+        import("katex")
+            .then(m => m.default)
+            .then(katex => {
+                katex.render(text, el as HTMLElement, {displayMode, throwOnError: false});
+            })
+            .catch(err => console.error("Failed to render LaTeX", err));
+    }
+
     private afterRenderedOutput() {
-        if (this.scrollOnOutput) {
+        if (this.scrollOnOutput && !this.followPaused) {
             this.navigationControls.navigateBottom();
         }
         this.afterAppendHtml();
@@ -362,6 +456,7 @@ export class DumpContainer implements IDisposable {
         if (reset) {
             this.lastOutputOrder = 0;
             this.earlyMessagesOutputQueue.splice(0);
+            this.followPaused = false;
         }
     }
 

@@ -84,9 +84,23 @@ public class ScriptEnvironmentBackgroundService(
 
     private void HandleScriptInputOutput(ScriptEnvironment environment)
     {
+        var pendingInputMasked = new PendingMaskedFlag();
+
+        var userInputMaskedToken = eventBus.Subscribe<Events.ScriptUserInputRequestedEvent>(ev =>
+        {
+            if (ev.ScriptId == environment.Script.Id)
+            {
+                pendingInputMasked.Set(ev.IsMasked);
+            }
+
+            return Task.CompletedTask;
+        });
+        AddEnvironmentEventToken(environment, userInputMaskedToken);
+
         var inputReader = new AsyncActionInputReader<string>(
             // TODO There should be a way to cancel the wait when the environment stops using a CancellationToken
-            async () => await ipcService.SendAndReceiveAsync(new PromptUserForInputCommand(environment.Script.Id)));
+            async () => await ipcService.SendAndReceiveAsync(
+                new PromptUserForInputCommand(environment.Script.Id, pendingInputMasked.Consume())));
 
         var outputWriter = new ScriptEnvironmentIpcOutputWriter(
             environment,
@@ -119,5 +133,22 @@ public class ScriptEnvironmentBackgroundService(
         }
 
         _environmentSubscriptionTokens.TryRemove(environment.Script.Id, out _);
+    }
+
+    /// <summary>
+    /// Holds the masking characteristic of the most recent input request for one environment.
+    /// </summary>
+    private sealed class PendingMaskedFlag
+    {
+        private volatile bool _masked;
+
+        public void Set(bool masked) => _masked = masked;
+
+        public bool Consume()
+        {
+            var value = _masked;
+            _masked = false;
+            return value;
+        }
     }
 }

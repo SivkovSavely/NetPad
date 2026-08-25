@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -18,6 +19,7 @@ public class ScriptRunner
     private readonly StdioIpcGateway _ipcGateway;
     private readonly HashSet<string> _scriptHostLoadedAssemblies = new();
     private TaskCompletionSource<string?>? _userInputRequest;
+    private readonly JsEvalBridge _jsEvalBridge;
     private bool _firstRun = true;
 
     public ScriptRunner(StdioIpcGateway ipcGateway)
@@ -27,10 +29,21 @@ public class ScriptRunner
 
         // Allows scripts to request other scripts to be opened and run in the parent app (Util.Run).
         Util.OnRequestRunScript = path => _ipcGateway.Send(new RunScriptFromPathMessage(path));
+
+        // JavaScript evaluation requests are relayed through the parent app into the script's results view.
+        _jsEvalBridge = new JsEvalBridge(request => _ipcGateway.Send(request));
+        Util.OnRequestJsEval = (code, timeoutMs) => _jsEvalBridge.EvaluateAsync(code, timeoutMs);
+        Util.OnResultHostCommand = (command, payloadJson) =>
+            _ipcGateway.Send(new ResultHostCommandMessage(command, payloadJson));
+        Util.OnHtmlHeadChanged = entries =>
+            _ipcGateway.Send(new ScriptHtmlHeadMessage(entries));
     }
 
     public void Run(RunScriptMessage message)
     {
+        // Fresh cancellation token and cleared interactive registrations for each run.
+        Util.BeginInteractiveRunScope();
+
         Util.Stopwatch.Reset();
 
         Util.SetUserScript(new UserScript(
@@ -39,9 +52,6 @@ public class ScriptRunner
             message.ScriptFilePath,
             message.IsDirty
         ));
-
-        // Values registered via Util.OnDemand are only valid for the current run.
-        Util.ClearOnDemandRegistry();
 
         ClientServerDumpSink.Instance.RedirectStdIO(
             str =>
@@ -52,7 +62,7 @@ public class ScriptRunner
             () =>
             {
                 _userInputRequest = new TaskCompletionSource<string?>();
-                _ipcGateway.Send(new RequestUserInputMessage());
+                _ipcGateway.Send(new RequestUserInputMessage(Util.TakeNextUserInputMasked()));
                 return _userInputRequest.Task.Result;
             }
         );
@@ -77,8 +87,18 @@ public class ScriptRunner
 
             Execute(message.ScriptAssemblyPath, message.ProbingPaths);
 
+            // While the script holds Util.KeepRunning leases, stay alive so its callbacks remain usable.
+            if (KeepRunningManager.HasActiveLeases)
+            {
+                KeepRunningManager.WaitUntilReleasedAsync(Util.QueryCancelToken).GetAwaiter().GetResult();
+            }
+
+            var result = Util.SoftCancellationRequested
+                ? RunResult.RunCancelled()
+                : RunResult.Success(Util.Stopwatch.ElapsedMilliseconds);
+
             _ipcGateway.Send(new ScriptRunCompleteMessage(
-                RunResult.Success(Util.Stopwatch.ElapsedMilliseconds),
+                result,
                 Util.RestartHostOnEveryRun
             ));
         }
@@ -92,6 +112,7 @@ public class ScriptRunner
         }
         finally
         {
+            Util.EndInteractiveRunScope();
             GcUtil.CollectAndWait();
         }
     }
@@ -153,6 +174,21 @@ public class ScriptRunner
     public void ExpandOutput(ExpandOutputMessage message)
     {
         Util.ExpandOnDemand(message.OutputId);
+    }
+
+    public void InvokeScriptAction(InvokeScriptActionMessage message)
+    {
+        Util.InvokeScriptAction(message.ActionId);
+    }
+
+    public void RequestSoftCancellation(CancelScriptMessage _)
+    {
+        Util.RequestCooperativeCancellation();
+    }
+
+    public void ReceiveJsEvalResult(JsEvalResultMessage message)
+    {
+        _jsEvalBridge.Receive(message);
     }
 
     private void StartForwardingMemCacheItemInfoChanges()

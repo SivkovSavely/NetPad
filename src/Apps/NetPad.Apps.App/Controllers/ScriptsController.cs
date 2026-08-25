@@ -341,6 +341,16 @@ public class ScriptsController(IMediator mediator, IScriptRepository scriptRepos
         environment.ExpandOutput(outputId);
     }
 
+    /// <summary>
+    /// Invokes an action registered by the running script (ex. Hyperlinq click handlers).
+    /// </summary>
+    [HttpPatch("{id:guid}/actions/{actionId}")]
+    public async Task InvokeScriptAction(Guid id, string actionId)
+    {
+        var environment = await GetScriptEnvironmentAsync(id);
+        environment.InvokeScriptAction(actionId);
+    }
+
     private async Task<Script> GetScriptAsync(Guid id)
     {
         var script = session.Get(id)?.Script;

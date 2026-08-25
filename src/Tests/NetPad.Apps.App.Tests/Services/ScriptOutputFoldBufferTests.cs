@@ -102,4 +102,33 @@ public sealed class ScriptOutputFoldBufferTests
         var error = Assert.Single(_buffer.Errors);
         Assert.Equal("(1,1): error CS0103: oh no", error);
     }
+
+    [Fact]
+    public async Task PanelsAreFlattenedAfterMainResultsWithHeadings()
+    {
+        await WriteAsync(new ScriptOutput(ScriptOutputKind.Result, 1, "main"));
+        await WriteAsync(new ScriptOutput(ScriptOutputKind.Result, 2, "panel-a-1") { PanelName = "A" });
+        await WriteAsync(new ScriptOutput(ScriptOutputKind.Result, 3, "panel-b-1") { PanelName = "B" });
+        await WriteAsync(new ScriptOutput(ScriptOutputKind.Result, 4, "panel-a-2") { PanelName = "A" });
+
+        var output = _buffer.Output;
+
+        // Main results first (panel outputs removed), then panels in creation order with headings.
+        Assert.Equal(
+            new[] { "main", "[A]", "panel-a-1", "panel-a-2", "[B]", "panel-b-1" },
+            output.Select(o => o.Body).ToArray());
+    }
+
+    [Fact]
+    public async Task PanelUpdatesAreFoldedLikeMainSlots()
+    {
+        await WriteAsync(new ScriptOutput(ScriptOutputKind.Result, 1, "initial") { PanelName = "P", OutputId = "slot" });
+        await WriteAsync(new ScriptOutput(ScriptOutputKind.Result, 2, "updated")
+        {
+            PanelName = "P", OutputId = "slot", IsUpdate = true
+        });
+
+        var bodies = _buffer.Output.Select(o => o.Body).ToArray();
+        Assert.Equal(new[] { "[P]", "updated" }, bodies);
+    }
 }

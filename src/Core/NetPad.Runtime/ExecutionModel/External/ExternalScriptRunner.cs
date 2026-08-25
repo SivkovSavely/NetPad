@@ -232,6 +232,15 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
     {
     }
 
+    public void InvokeScriptAction(string actionId)
+    {
+    }
+
+    public void SendToScriptHost(object message)
+    {
+        throw new NotSupportedException($"{GetType().Name} does not use a script host process.");
+    }
+
     public void Dispose()
     {
         _logger.LogTrace("Dispose start");

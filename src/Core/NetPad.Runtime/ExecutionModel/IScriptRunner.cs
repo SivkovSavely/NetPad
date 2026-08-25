@@ -47,4 +47,16 @@ public interface IScriptRunner : IDisposable
     /// (see <see cref="ScriptServices.Util.OnDemand{T}"/>) and writes its result to the output.
     /// </summary>
     void ExpandOutput(string outputId);
+
+    /// <summary>
+    /// Invokes an action previously registered by a running script
+    /// (see <see cref="Presentation.Hyperlinq"/> action links).
+    /// </summary>
+    void InvokeScriptAction(string actionId);
+
+    /// <summary>
+    /// Sends a message to the running script's host process. Supported only by runners that use
+    /// a separate host process; otherwise throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    void SendToScriptHost(object message);
 }

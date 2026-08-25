@@ -6,6 +6,7 @@ import {SqlViewDumpContainer} from "./components/sql-view/sql-view-dump-containe
 export interface IUserInputRequest {
     commandId: string;
     userInput?: string | undefined;
+    masked?: boolean;
 }
 
 /**
@@ -15,7 +16,13 @@ export class OutputModel {
     public inputRequest?: IUserInputRequest | null;
     private disposables = new DisposableCollection();
 
+    // Named result panels (Util.OpenPanel), in creation order.
+    public panels = new Map<string, DumpContainer>();
+    public panelNames: string[] = [];
+    private readonly settings: Settings;
+
     public constructor(public environment: ScriptEnvironment, settings: Settings) {
+        this.settings = settings;
         this.resultsDumpContainer = new DumpContainer(settings);
         this.sqlDumpContainer = new SqlViewDumpContainer(settings);
     }
@@ -23,10 +30,41 @@ export class OutputModel {
     public resultsDumpContainer: DumpContainer;
     public sqlDumpContainer: SqlViewDumpContainer;
 
+    /**
+     * Gets or creates the dump container for a named result panel.
+     */
+    public getOrCreatePanel(name: string): DumpContainer {
+        let container = this.panels.get(name);
+
+        if (!container) {
+            container = new DumpContainer(this.settings);
+            this.panels.set(name, container);
+            this.panelNames = [...this.panels.keys()];
+        }
+
+        return container;
+    }
+
+    public removePanel(name: string) {
+        const container = this.panels.get(name);
+        if (!container) return;
+
+        container.dispose();
+        this.panels.delete(name);
+        this.panelNames = [...this.panels.keys()];
+    }
+
+    public clearPanels() {
+        for (const name of [...this.panels.keys()]) {
+            this.removePanel(name);
+        }
+    }
+
     public destroy() {
         this.disposables.dispose();
         this.resultsDumpContainer.dispose();
         this.sqlDumpContainer.dispose();
+        this.clearPanels();
         this.inputRequest = null;
     }
 
@@ -45,7 +83,11 @@ export class OutputModel {
                 lastOutputOrder: this.sqlDumpContainer.lastOutputOrder,
                 scrollOnOutput: this.sqlDumpContainer.scrollOnOutput,
                 textWrap: this.sqlDumpContainer.textWrap
-            }
+            },
+            panels: this.panelNames.map(name => ({
+                name,
+                html: this.panels.get(name)!.getHtml()
+            }))
         };
     }
 }
@@ -58,6 +100,12 @@ export interface IOutputModelDto {
     inputRequest?: IUserInputRequest | null;
     resultsDumpContainer: IDumpContainerDto;
     sqlDumpContainer: IDumpContainerDto;
+    panels?: IPanelDto[];
+}
+
+export interface IPanelDto {
+    name: string;
+    html: string;
 }
 
 /**

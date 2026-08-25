@@ -138,3 +138,60 @@ describe("DumpContainer mutable output", () => {
         removeSpy.mockRestore();
     });
 });
+
+describe("DumpContainer Hyperlinq actions and rich content", () => {
+    test("invokes onInvokeAction with the data-netpad-action-id of the clicked anchor", async () => {
+        const container = createContainer();
+        const handler = jest.fn();
+        container.onInvokeAction = handler;
+
+        container.appendOutput(output(
+            1,
+            '<div class="group"><span><a href="javascript:void(0)" data-netpad-action-id="hl-42">Do it</a></span></div>'
+        ));
+
+        await new Promise(resolve => setTimeout(resolve, 10)); // Render queue is debounced.
+
+        const anchor = container.element.querySelector("[data-netpad-action-id='hl-42']")!;
+        expect(anchor).not.toBeNull();
+
+        anchor.dispatchEvent(new MouseEvent("click", {bubbles: true}));
+
+        expect(handler).toHaveBeenCalledWith("hl-42");
+    });
+
+    test("renders markdown content and keeps embedded raw HTML escaped by default", async () => {
+        jest.useRealTimers();
+        const container = createContainer();
+        document.body.appendChild(container.element);
+
+        container.appendOutput(output(
+            1,
+            '<div class="group"><div class="netpad-markdown" data-allow-raw-html="false">**bold** &lt;script&gt;alert(1)&lt;/script&gt;</div></div>'
+        ));
+
+        // Rendering is debounced and loads the markdown parser asynchronously.
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        const markdownEl = container.element.querySelector(".netpad-markdown")!;
+        expect(markdownEl.querySelector("strong")).toBeTruthy(); // Markdown was parsed.
+        expect(markdownEl.querySelector("script")).toBeNull();   // Raw HTML stayed escaped.
+
+        container.element.remove();
+    });
+
+    test("keeps the display-mode flag on LaTeX content", async () => {
+        const container = createContainer();
+
+        container.appendOutput(output(
+            1,
+            '<div class="group"><div class="netpad-latex" data-display-mode="true">x^2</div></div>'
+        ));
+
+        await new Promise(resolve => setTimeout(resolve, 10)); // Render queue is debounced.
+
+        const latexEl = container.element.querySelector(".netpad-latex")!;
+        expect(latexEl).not.toBeNull();
+        expect(latexEl.getAttribute("data-display-mode")).toBe("true");
+    });
+});

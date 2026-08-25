@@ -38,7 +38,8 @@ public class ClientServerOutputHtmlWriter(Func<string, Task> writeToMainOut) : I
         var scriptOutput = new ScriptOutput(ScriptOutputKind.Result, order, html, ScriptOutputFormat.Html)
         {
             OutputId = outputId,
-            IsUpdate = isUpdate
+            IsUpdate = isUpdate,
+            PanelName = OutputRouting.PanelName
         };
         var serializedOutput = Common.JsonSerializer.Serialize(scriptOutput);
         await writeToMainOut(serializedOutput);

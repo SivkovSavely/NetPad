@@ -113,11 +113,23 @@ No npad/LPRun CLI parity; no credentials overhaul; no EChart; no debugger; don't
 
 ## Completion checklist
 
-- [ ] All selected items implemented with acceptance criteria
-- [ ] Tests added/passing
-- [ ] Master checklist updated + commits logged below
-- [ ] User validation notes left here
+- [x] All selected items implemented with acceptance criteria (see documented differences in the master plan's plan-02 section)
+- [x] Tests added/passing (`NetPad.Runtime.Tests`: CSV/Uncapsulate/XHTML/spreadsheet/Hyperlinq+Markdown/LaTeX converters/HtmlHead/panels routing/KeepRunning/QueryCancelToken/JsEvalBridge; `NetPad.Apps.App.Tests`: fold-buffer panel flattening; Jest: dump-container action clicks + markdown/LaTeX content)
+- [x] Master checklist updated + commits logged below
+- [x] User validation notes left here
+
+## User validation notes
+
+- `Util.Markdown("# Hi")`, `Util.Latex("x^2")`, `new Hyperlinq(new Uri("https://..."))`, `new Hyperlinq(() => "clicked".Dump(), "click")` and `Hyperlinq.File(path, line)` render interactively; action links survive while the run is alive.
+- `Util.OpenPanel("Stats")` opens a panel tab; `panel.Dump(...)`, `.Write(...)`, `.Clear()`, `.Close()` manage it. Panels clear on rerun.
+- `Util.ClearResults() / HideEditor() / HideResults() / AutoScrollResults(true)` act on the current view; auto-scroll pauses when you scroll away from the bottom.
+- `await Util.KeepRunning()` lease keeps Hyperlinq actions usable after completion; Stop now soft-cancels first (QueryCancelToken), hard-stops after ~5s.
+- Ctrl+Shift+F5 = Cancel-and-Execute.
+- `Util.ToCsvString(...)/WriteCsv(...)` handle anonymous/POCO/dictionary/scalar sources; `Util.CreateXhtmlWriter().WriteLine(obj).ToString()` builds a standalone HTML doc; `new[] {...}.ToSpreadsheet().Save(path)` writes .xlsx (formulas stored un-evaluated).
+- `Util.GetMyScripts()` lists scripts from the configured scripts directory; `Util.GetPassword("name")` prompts masked when no secret exists.
 
 ## Progress log
 
-(commits appended here as they land)
+- (this branch) Add script data/reflection APIs: CSV (ToCsvString/WriteCsv), XhtmlWriter, spreadsheet workbook model via DocumentFormat.OpenXml, Uncapsulate, GetMyScripts (scriptsDirectoryPath snapshot in scriptconfig.json), TransactionIsolationLevel for SQL scripts.
+- (this branch) Add interactive host APIs: Hyperlinq dispatch registry + REST invoke endpoint, Markdown/LaTeX dumpable content with client-side rendering, Util.JS bridge (correlated IPC + main-window eval), Util.HtmlHead with per-script head injection, result-host commands (ClearResults/Hide*/AutoScroll) over one typed message family, KeepRunning leases + QueryCancelToken with soft-cancel-first stop and Cancel-and-Execute shortcut (Ctrl+Shift+F5), GetPassword masked prompting, named result panels end-to-end (ScriptOutput.PanelName, output-pane tabs, fold-buffer flattening), richer Util.Run child-runner via isolated child runs.
+

@@ -50,6 +50,8 @@ public class EventForwardToIpcBackgroundService(
         SubscribeAndForwardToIpc<DataConnectionSchemaValidationStartedEvent>();
         SubscribeAndForwardToIpc<DataConnectionSchemaValidationCompletedEvent>();
         SubscribeAndForwardToIpc<RecentScriptsChangedEvent>();
+        SubscribeAndForwardToIpc<ResultHostCommandEvent>();
+        SubscribeAndForwardToIpc<ScriptHtmlHeadChangedEvent>();
     }
 
     private void ForwardEnvironmentLevelEvents()

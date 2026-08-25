@@ -55,4 +55,12 @@ public class NullScriptRunner : IScriptRunner
     public void ExpandOutput(string outputId)
     {
     }
+
+    public void InvokeScriptAction(string actionId)
+    {
+    }
+
+    public void SendToScriptHost(object message)
+    {
+    }
 }

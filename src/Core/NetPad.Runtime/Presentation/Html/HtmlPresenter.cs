@@ -36,7 +36,10 @@ public static class HtmlPresenter
                 new HorizontalRunHtmlConverter(),
                 new StyledValueHtmlConverter(),
                 new HighlightedTextHtmlConverter(),
-                new OnDemandValueHtmlConverter()
+                new OnDemandValueHtmlConverter(),
+                new HyperlinqHtmlConverter(),
+                new MarkdownContentHtmlConverter(),
+                new LatexContentHtmlConverter()
             },
         };
 
