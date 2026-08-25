@@ -5,6 +5,7 @@ import {
     IEventBus,
     ISession,
     IShortcutManager,
+    IScriptService,
     IWindowService,
     KeyCombo,
     Pane,
@@ -43,6 +44,7 @@ export class OutputPane extends Pane {
         @IWindowService private readonly windowService: IWindowService,
         @IEventBus private eventBus: IEventBus,
         @IShortcutManager shortcutManager: IShortcutManager,
+        @IScriptService private readonly scriptService: IScriptService,
         private readonly appWindows: AppWindows,
         private readonly settings: Settings
     ) {
@@ -148,6 +150,8 @@ export class OutputPane extends Pane {
 
             if (!model) {
                 model = new OutputModel(active, this.settings);
+                model.resultsDumpContainer.onExpandOnDemand =
+                    outputId => void this.scriptService.expandOnDemand(active.script.id, outputId);
                 this.outputModels.set(active.script.id, model);
             }
 

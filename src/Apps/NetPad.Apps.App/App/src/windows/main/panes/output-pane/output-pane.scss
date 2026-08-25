@@ -143,6 +143,20 @@ output-pane {
             border-bottom: 2px dodgerblue dotted;
         }
 
+        .metatext {
+            color: #797e81;
+            font-style: italic;
+            font-size: $font-size - 1;
+
+            &.text {
+                padding-top: 0;
+            }
+        }
+
+        a[data-on-demand-id] {
+            cursor: pointer;
+        }
+
         table {
             width: initial;
             margin: 5px 0;

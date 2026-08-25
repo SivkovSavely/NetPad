@@ -13,6 +13,9 @@ export class DumpContainer implements IDisposable {
     public textWrap = false;
     public lastOutputOrder = 0;             // The order of the last output message rendered
 
+    // Invoked when the user clicks an on-demand placeholder (Util.OnDemand) rendered in this container
+    public onExpandOnDemand?: (outputId: string) => void;
+
     private renderQueue: Element[] = [];
     private lastRenderedOutput?: Element | null;
 
@@ -38,6 +41,15 @@ export class DumpContainer implements IDisposable {
 
         const token = UiUtil.confineSelectAllToElement(this.element);
         this.disposables.add(token);
+
+        const onClick = (ev: MouseEvent) => {
+            const target = ev.target instanceof Element ? ev.target.closest("[data-on-demand-id]") : null;
+            if (target) {
+                this.onExpandOnDemand?.(target.getAttribute("data-on-demand-id")!);
+            }
+        };
+        this.element.addEventListener("click", onClick);
+        this.disposables.add(() => this.element.removeEventListener("click", onClick));
     }
 
 

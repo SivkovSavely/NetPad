@@ -1903,6 +1903,8 @@ export interface IScriptsApiClient {
     deleteMemCacheItem(id: string, key: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
     clearMemCacheItems(id: string, signal?: AbortSignal | undefined): Promise<void>;
+
+    expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
 }
 
 export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient {
@@ -2848,6 +2850,44 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             });
         }
         return Promise.resolve<FileResponse | null>(null as any);
+    }
+
+    expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/on-demand/expand?";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (outputId === null)
+            throw new Error("The parameter 'outputId' cannot be null.");
+        else if (outputId !== undefined)
+            url_ += "outputId=" + encodeURIComponent("" + outputId) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processExpandOnDemand(_response);
+        });
+    }
+
+    protected processExpandOnDemand(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     dumpMemCacheItem(id: string, key: string | undefined, signal?: AbortSignal): Promise<void> {
