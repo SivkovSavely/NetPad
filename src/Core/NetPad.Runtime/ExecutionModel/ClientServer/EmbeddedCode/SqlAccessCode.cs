@@ -9,9 +9,17 @@ await using var command = DataContext.Database.GetDbConnection().CreateCommand()
 
 command.CommandText = @"SQL_CODE";
 await DataContext.Database.OpenConnectionAsync();
+Util.DatabaseConnectionOpened();
 
 try
 {
+    if (Util.TransactionIsolationLevel is { } isolationLevel)
+    {
+        await using var isolationCommand = DataContext.Database.GetDbConnection().CreateCommand();
+        isolationCommand.CommandText = $"SET TRANSACTION ISOLATION LEVEL {isolationLevel}";
+        await isolationCommand.ExecuteNonQueryAsync();
+    }
+
     await using var reader = await command.ExecuteReaderAsync();
 
     do
@@ -39,4 +47,5 @@ catch (System.Exception ex)
 finally
 {
     await DataContext.Database.CloseConnectionAsync();
+    Util.DatabaseConnectionClosed();
 }

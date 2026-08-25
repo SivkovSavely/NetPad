@@ -220,7 +220,8 @@ public partial class ExternalScriptRunner
     ""output"": {{
         ""maxDepth"": {_settings.Results.MaxSerializationDepth},
         ""maxCollectionSerializeLength"": {_settings.Results.MaxCollectionSerializeLength}
-    }}
+    }},
+    ""scriptsDirectoryPath"": {System.Text.Json.JsonSerializer.Serialize(_settings.ScriptsDirectoryPath)}
 }}");
 
         foreach (var referenceAssemblyImage in deployDependencies.AssemblyImageDependencies)

@@ -253,6 +253,8 @@ public partial class ClientServerScriptRunner
 
     protected virtual Task WriteScriptConfigAsync(DirectoryPath scriptDeployDir)
     {
+        var scriptsDirectoryPath = System.Text.Json.JsonSerializer.Serialize(_settings.ScriptsDirectoryPath);
+
         return File.WriteAllTextAsync(
             Path.Combine(scriptDeployDir.Path, "scriptconfig.json"),
             $$"""
@@ -260,7 +262,8 @@ public partial class ClientServerScriptRunner
                   "output": {
                       "maxDepth": {{_settings.Results.MaxSerializationDepth}},
                       "maxCollectionSerializeLength": {{_settings.Results.MaxCollectionSerializeLength}}
-                  }
+                  },
+                  "scriptsDirectoryPath": {{scriptsDirectoryPath}}
               }
               """);
     }
