@@ -24,7 +24,11 @@ public static class HtmlPresenter
                 new AudioHtmlConverter(),
                 new VideoHtmlConverter(),
                 new MediaFileHtmlConverter(),
-                new MediaFileCollectionConverter()
+                new MediaFileCollectionConverter(),
+                new HorizontalRunHtmlConverter(),
+                new StyledValueHtmlConverter(),
+                new HighlightedTextHtmlConverter(),
+                new OnDemandValueHtmlConverter()
             },
         };
 
