@@ -6,6 +6,7 @@ using NetPad.Presentation.Html;
 
 namespace NetPad.Runtime.Tests.Presentation;
 
+[Collection("NetPad.Presentation.StaticPipeline")]
 public sealed class UtilExtrasTests : IDisposable
 {
     private readonly RecordingSink _sink = new();

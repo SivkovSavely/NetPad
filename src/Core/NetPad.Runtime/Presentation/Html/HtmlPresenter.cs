@@ -20,6 +20,14 @@ public static class HtmlPresenter
             DoNotSerializeNonRootEmptyCollections = true,
             Converters =
             {
+                // Dump-pipeline converters (ToDump customization, per-dump option gates) run
+                // before the fork's presentational converters; both precede O2Html defaults.
+                new ToDumpHtmlConverter(),
+                new FormattedValueHtmlConverter(),
+                new MemberFilteredObjectHtmlConverter(),
+                new DumpOptionsCollectionHtmlConverter(),
+                new CompositionHtmlConverter(),
+                new DiffResultHtmlConverter(),
                 new ImageHtmlConverter(),
                 new AudioHtmlConverter(),
                 new VideoHtmlConverter(),
@@ -62,11 +70,37 @@ public static class HtmlPresenter
     {
         options ??= new DumpOptions();
 
+        using var _ = PresentationSerializationContext.Push(options);
+
+        var outermostTraversal = ToDumpTraversal.BeginIfNotStarted();
+        try
+        {
+            return SerializeToElementCore(output, options, isError);
+        }
+        finally
+        {
+            if (outermostTraversal)
+            {
+                ToDumpTraversal.End();
+            }
+        }
+    }
+
+    private static Element SerializeToElementCore(object? output, DumpOptions options, bool isError)
+    {
         bool isTitled = options.Title != null;
 
         if (!isError && output is Exception)
         {
             isError = true;
+        }
+
+        // Per-dump overrides require a cloned serializer-options instance; otherwise the shared
+        // configured instance (with settings-provided limits) is used as-is.
+        var serializerOptions = _htmlSerializerOptions;
+        if (options.MaxDepth is > 0 && options.MaxDepth != serializerOptions.MaxDepth)
+        {
+            serializerOptions = CloneSerializerOptions(maxDepth: options.MaxDepth);
         }
 
         // If output is already an HTML DOM element, do not serialize it.
@@ -80,12 +114,12 @@ public static class HtmlPresenter
                 }
                 else
                 {
-                    node = HtmlSerializer.Serialize(output, _htmlSerializerOptions);
+                    node = HtmlSerializer.Serialize(output, serializerOptions);
                 }
             }
             catch (Exception ex)
             {
-                node = HtmlSerializer.Serialize("Could not serialize object to HTML. " + ex, _htmlSerializerOptions);
+                node = HtmlSerializer.Serialize("Could not serialize object to HTML. " + ex, serializerOptions);
                 isError = true;
             }
         }
@@ -149,7 +183,30 @@ public static class HtmlPresenter
             group.SetAttribute("data-destruct", options.DestructAfterMs.Value.ToString());
         }
 
+        if (options.Expanded != null)
+        {
+            group.SetAttribute("data-expanded", options.Expanded.Value ? "true" : "false");
+        }
+
         return group;
+    }
+
+    private static HtmlSerializerOptions CloneSerializerOptions(uint? maxDepth = null, uint? maxCollectionSerializeLength = null)
+    {
+        var clone = new HtmlSerializerOptions
+        {
+            ReferenceLoopHandling = _htmlSerializerOptions.ReferenceLoopHandling,
+            DoNotSerializeNonRootEmptyCollections = _htmlSerializerOptions.DoNotSerializeNonRootEmptyCollections,
+            MaxCollectionSerializeLength = maxCollectionSerializeLength ?? _htmlSerializerOptions.MaxCollectionSerializeLength,
+            MaxDepth = maxDepth ?? _htmlSerializerOptions.MaxDepth,
+        };
+
+        foreach (var converter in _htmlSerializerOptions.Converters)
+        {
+            clone.Converters.Add(converter);
+        }
+
+        return clone;
     }
 
     /// <summary>

@@ -4,6 +4,7 @@ using NetPad.Presentation;
 
 namespace NetPad.Runtime.Tests.Presentation;
 
+[Collection("NetPad.Presentation.StaticPipeline")]
 public sealed class DumpContainerTests : IDisposable
 {
     private readonly RecordingDumpSink _sink = new();

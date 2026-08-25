@@ -158,17 +158,22 @@ public sealed class HtmlSerializer
 
     internal HtmlConverter? GetConverter(Type type)
     {
-        if (_typeConverterCache.TryGetValue(type, out var match))
+        // The cache is only safe when every serializer instance resolves converters from the same
+        // (default) set. Custom converter sets differ per instance and would otherwise poison the
+        // shared cache with entries that are wrong for other instances.
+        var useCache = SerializerOptions.Converters.Count == 0;
+
+        if (useCache && _typeConverterCache.TryGetValue(type, out var match))
             return match;
 
         foreach (var converter in Converters)
         {
             if (!converter.CanConvert(type)) continue;
-            _typeConverterCache.TryAdd(type, converter);
+            if (useCache) _typeConverterCache.TryAdd(type, converter);
             return converter;
         }
 
-        _typeConverterCache.TryAdd(type, null);
+        if (useCache) _typeConverterCache.TryAdd(type, null);
         return null;
     }
 

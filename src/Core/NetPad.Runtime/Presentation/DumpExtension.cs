@@ -16,48 +16,24 @@ public static class DumpExtension
     }
 
     /// <summary>
+    /// Resolves effective options for a user-initiated dump. Precedence: explicit per-call
+    /// options &gt; script-global defaults (<see cref="DumpOptions.Default"/>, also surfaced as
+    /// <c>Util.DumpDefaults</c>) &gt; application results settings &gt; built-in defaults.
+    /// </summary>
+    private static DumpOptions Prepare(DumpOptions? explicitOptions) => DumpOptions.Merge(explicitOptions);
+
+    /// <summary>
     /// Dumps an object, or value, to the results console.
     /// </summary>
-    /// <typeparam name="T">
-    /// The type of the object being dumped. Can be a reference or value type.
-    /// </typeparam>
-    /// <param name="o">The object to dump.</param>
-    /// <param name="title">
-    /// Optional. A heading displayed above the dumped output to help distinguish multiple dumps.
-    /// For example, <c>Dump(person, "Current User")</c> renders a “Current User” heading.
-    /// </param>
-    /// <param name="css">
-    /// Optional. One or more CSS class names to apply to the output container for styling the rendered dump.
-    /// You can use standard Bootstrap v5 class names (e.g., <c>"text-success"</c>, <c>"w-25"</c>), or specify custom classes
-    /// that you've defined under Settings &gt; Styles.
-    /// For example: <c>Dump(obj, css: "card text-bg-warning w-25")</c>
-    /// </param>
-    /// <param name="code">
-    /// Optional. If you’re dumping a code snippet, specify its language (e.g. <c>"csharp"</c>, <c>"json"</c>, <c>"xml"</c>, etc.).
-    /// The output will be syntax-highlighted using <see href="https://github.com/highlightjs/highlight.js/blob/main/SUPPORTED_LANGUAGES.md">Highlight.js</see>.
-    /// </param>
-    /// <param name="clear">
-    /// Optional. If provided, the dump will automatically be removed from the console after the given time in milliseconds.
-    /// For example, <c>clear: 5000</c> makes it disappear after 5 seconds.
-    /// </param>
-    /// <returns>
-    /// Returns the same object instance (<paramref name="o"/>), allowing you to write:
-    /// <code>
-    /// var result = GetItems()
-    ///     .Where(i => i.IsValid)
-    ///     .Dump("Filtered Items")
-    ///     .Select(i => i.Value);
-    /// </code>
-    /// </returns>
     [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull("o")]
     public static T? Dump<T>(this T? o, string? title = null, string? css = null, string? code = null, int? clear = null)
     {
-        Sink.ResultWrite(o, new DumpOptions(
+        Sink.ResultWrite(o, Prepare(new DumpOptions(
             Title: title,
             CssClasses: css,
             CodeType: code,
             DestructAfterMs: clear
-        ));
+        )));
 
         return o;
     }
@@ -71,44 +47,16 @@ public static class DumpExtension
     /// <summary>
     /// Dumps an object, or value, to the results console, awaiting the call first.
     /// </summary>
-    /// <typeparam name="T">
-    /// The type of the object being dumped. Can be a reference or value type.
-    /// </typeparam>
-    /// <param name="o">The object to dump.</param>
-    /// <param name="title">
-    /// Optional. A heading displayed above the dumped output to help distinguish multiple dumps.
-    /// For example, <c>Dump(person, "Current User")</c> renders a “Current User” heading.
-    /// </param>
-    /// <param name="css">
-    /// Optional. One or more CSS class names to apply to the output container for styling the rendered dump.
-    /// You can use standard Bootstrap v5 class names (e.g., <c>"text-success"</c>, <c>"w-25"</c>), or specify custom classes
-    /// that you've defined under Settings &gt; Styles.
-    /// For example: <c>Dump(obj, css: "card text-bg-warning w-25")</c>
-    /// </param>
-    /// <param name="code">
-    /// Optional. If you’re dumping a code snippet, specify its language (e.g. <c>"csharp"</c>, <c>"json"</c>, <c>"xml"</c>, etc.).
-    /// The output will be syntax-highlighted using <see href="https://github.com/highlightjs/highlight.js/blob/main/SUPPORTED_LANGUAGES.md">Highlight.js</see>.
-    /// </param>
-    /// <param name="clear">
-    /// Optional. If provided, the dump will automatically be removed from the console after the given time in milliseconds.
-    /// For example, <c>clear: 5000</c> makes it disappear after 5 seconds.
-    /// </param>
-    /// <returns>
-    /// Returns the same object instance (<paramref name="o"/>), allowing you to write:
-    /// <code>
-    /// var result = await GetItemsAsync().Dump("Filtered Items")
-    /// </code>
-    /// </returns>
     [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull("o")]
     public static async Task<T?> Dump<T>(this Task<T?> o, string? title = null, string? css = null, string? code = null, int? clear = null)
     {
         var result = await o.ConfigureAwait(false);
-        Sink.ResultWrite(result, new DumpOptions(
+        Sink.ResultWrite(result, Prepare(new DumpOptions(
             Title: title,
             CssClasses: css,
             CodeType: code,
             DestructAfterMs: clear
-        ));
+        )));
 
         return result;
     }
@@ -116,60 +64,203 @@ public static class DumpExtension
     /// <summary>
     /// Dumps this object to the results console.
     /// </summary>
-    /// <param name="o">The object to dump.</param>
-    /// <param name="options">Dump options.</param>
-    /// <returns>The same object being dumped.</returns>
     [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull("o")]
     public static T? Dump<T>(this T? o, DumpOptions options)
     {
-        Sink.ResultWrite(o, options);
+        Sink.ResultWrite(o, Prepare(options));
         return o;
     }
 
     /// <summary>
     /// Dumps this object to the results console.
     /// </summary>
-    /// <param name="o">The object to dump.</param>
-    /// <param name="options">Dump options.</param>
-    /// <returns>The same object being dumped.</returns>
     public static async Task<T> Dump<T>(this Task<T> o, DumpOptions options)
     {
         var result = await o.ConfigureAwait(false);
-        Sink.ResultWrite(result, options);
+        Sink.ResultWrite(result, Prepare(options));
         return result;
     }
 
     /// <summary>
     /// Dumps this <see cref="Span{T}"/> to the results view.
     /// </summary>
-    /// <param name="span">The <see cref="Span{T}"/> to dump.</param>
-    /// <param name="title">An optional title for the result.</param>
-    /// <param name="cssClasses">If specified, will be added as CSS classes to the result.</param>
-    /// <param name="clear">If specified, will remove the result after specified milliseconds.</param>
-    /// <returns>The <see cref="Span{T}"/> being dumped.</returns>
     public static Span<T> Dump<T>(this Span<T> span, string? title = null, string? cssClasses = null, int? clear = null)
     {
-        Sink.ResultWrite(span.ToArray(), new DumpOptions(
+        Sink.ResultWrite(span.ToArray(), Prepare(new DumpOptions(
             Title: title,
-            CssClasses: cssClasses
-        ));
+            CssClasses: cssClasses,
+            DestructAfterMs: clear
+        )));
         return span;
     }
 
     /// <summary>
     /// Dumps this <see cref="ReadOnlySpan{T}"/> to the results view.
     /// </summary>
-    /// <param name="span">The <see cref="ReadOnlySpan{T}"/> to dump.</param>
-    /// <param name="title">An optional title for the result.</param>
-    /// <param name="cssClasses">If specified, will be added as CSS classes to the result.</param>
-    /// <param name="clear">If specified, will remove the result after specified milliseconds.</param>
-    /// <returns>The <see cref="ReadOnlySpan{T}"/> being dumped.</returns>
     public static ReadOnlySpan<T> Dump<T>(this ReadOnlySpan<T> span, string? title = null, string? cssClasses = null, int? clear = null)
     {
-        Sink.ResultWrite(span.ToArray(), new DumpOptions(
+        Sink.ResultWrite(span.ToArray(), Prepare(new DumpOptions(
             Title: title,
-            CssClasses: cssClasses
-        ));
+            CssClasses: cssClasses,
+            DestructAfterMs: clear
+        )));
         return span;
+    }
+
+    /// <summary>
+    /// Dumps this object to the results console, using the dumped source expression as the title
+    /// when no explicit title is provided. Ordinary <see cref="Dump"/> behavior is unchanged.
+    /// </summary>
+    /// <param name="o">The object to dump.</param>
+    /// <param name="title">Optional explicit title; overrides the source expression.</param>
+    /// <param name="expression">Captured automatically; the caller's argument expression.</param>
+    /// <example><code>
+    /// someComplicatedExpression.DumpTell();
+    /// </code></example>
+    [return: System.Diagnostics.CodeAnalysis.NotNullIfNotNull("o")]
+    public static T? DumpTell<T>(this T? o, string? title = null,
+        [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(o))] string? expression = null)
+    {
+        Sink.ResultWrite(o, Prepare(new DumpOptions(Title: title ?? CollapseExpression(expression))));
+        return o;
+    }
+
+    /// <summary>
+    /// Enumerates an async sequence and dumps its items into a single result block, updating the
+    /// block in place while enumerating when the session is interactive. Honors the row limit of
+    /// the resolved dump options (<see cref="DumpOptions.MaxRows"/> or the application results
+    /// setting), stops consuming the source once the limit is reached, supports cancellation, and
+    /// renders enumeration errors without discarding items produced before the error.
+    /// </summary>
+    /// <returns>The items that were enumerated and dumped.</returns>
+    public static async Task<List<T>> DumpAsync<T>(
+        this IAsyncEnumerable<T> source,
+        string? title = null,
+        string? css = null,
+        DumpOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var baseOptions = Prepare(new DumpOptions(Title: title, CssClasses: css).MergeFrom(options));
+
+        // Row cap precedence mirrors serializer limits: explicit option, then application setting.
+        var cap = (int)(baseOptions.MaxRows ?? PresentationSettings.MaxCollectionLength);
+
+        var interactive = ProgressBar.IsInteractiveSink();
+
+        var outputId = interactive ? "AE" + Guid.NewGuid().ToString("N") : null;
+        var items = new List<T>(Math.Min(cap, 1024));
+        var endState = AsyncDumpEndState.Completed;
+
+        var initialWritten = false;
+        var dirtySinceLastWrite = false;
+
+        void WriteCurrent()
+        {
+            Sink.ResultWrite(items.ToArray(), baseOptions, outputId, initialWritten);
+            initialWritten = true;
+            dirtySinceLastWrite = false;
+        }
+
+        if (interactive)
+        {
+            // Establish the result slot immediately so later updates replace it in place and
+            // keep their position relative to other output.
+            WriteCurrent();
+        }
+
+        try
+        {
+            await foreach (var item in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                if (items.Count >= cap)
+                {
+                    endState = AsyncDumpEndState.RowLimitReached;
+                    break;
+                }
+
+                items.Add(item);
+                dirtySinceLastWrite = true;
+
+                if (interactive && items.Count % AsyncDumpUpdateBatchSize == 0)
+                {
+                    WriteCurrent();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            endState = AsyncDumpEndState.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            endState = AsyncDumpEndState.Faulted;
+
+            if (interactive)
+            {
+                if (dirtySinceLastWrite) WriteCurrent();
+            }
+            else
+            {
+                WriteCurrent();
+            }
+
+            Sink.ResultWrite(
+                $"Error enumerating dumped sequence after {items.Count} item(s): {ex.Message}",
+                Prepare(new DumpOptions(CssClasses: "error")));
+
+            throw;
+        }
+
+        if (!interactive || dirtySinceLastWrite)
+        {
+            WriteCurrent();
+        }
+
+        switch (endState)
+        {
+            case AsyncDumpEndState.RowLimitReached:
+                Sink.ResultWrite(
+                    $"Row limit reached ({cap}); enumeration stopped.",
+                    Prepare(new DumpOptions(CssClasses: "metatext")));
+                break;
+
+            case AsyncDumpEndState.Cancelled:
+                Sink.ResultWrite(
+                    $"Sequence dump cancelled after {items.Count} item(s).",
+                    Prepare(new DumpOptions(CssClasses: "metatext")));
+                break;
+        }
+
+        return items;
+    }
+
+    internal static string? CollapseExpression(string? expression)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            return null;
+        }
+
+        var collapsed = System.Text.RegularExpressions.Regex.Replace(expression, @"\s+", " ").Trim();
+
+        const int maxLength = 100;
+        if (collapsed.Length > maxLength)
+        {
+            collapsed = collapsed[..(maxLength - 1)] + "…";
+        }
+
+        return collapsed;
+    }
+
+    private const int AsyncDumpUpdateBatchSize = 50;
+
+    private enum AsyncDumpEndState
+    {
+        Completed,
+        RowLimitReached,
+        Cancelled,
+        Faulted,
     }
 }

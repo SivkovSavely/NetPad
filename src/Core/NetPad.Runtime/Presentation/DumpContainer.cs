@@ -7,8 +7,8 @@ public sealed class DumpContainer
 {
     private readonly string _outputId = Guid.NewGuid().ToString("N");
     private readonly object _sync = new();
+    private readonly List<object?> _contents = [];
     private bool _isDumped;
-    private object? _content;
 
     public DumpContainer()
     {
@@ -16,17 +16,49 @@ public sealed class DumpContainer
 
     public DumpContainer(object? content)
     {
-        _content = content;
+        _contents.Add(content);
     }
 
+    /// <summary>
+    /// A heading displayed above this container's rendered output.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// One or more CSS class names applied to this container's rendered output.
+    /// </summary>
+    public string? CssClasses { get; set; }
+
+    /// <summary>
+    /// Options applied to every write from this container. Members left unset fall back to
+    /// script-global dump defaults (<see cref="DumpOptions.Default"/>).
+    /// </summary>
+    public DumpOptions? Options { get; set; }
+
+    /// <summary>
+    /// Gets the current content. When <see cref="AppendContent"/> has been used, a sequence of
+    /// all appended items is returned.
+    /// </summary>
     public object? Content
     {
-        get => _content;
+        get
+        {
+            lock (_sync)
+            {
+                return _contents.Count switch
+                {
+                    0 => null,
+                    1 => _contents[0],
+                    _ => _contents.ToArray(),
+                };
+            }
+        }
         set
         {
             lock (_sync)
             {
-                _content = value;
+                _contents.Clear();
+                _contents.Add(value);
                 if (_isDumped) Write(true);
             }
         }
@@ -35,6 +67,32 @@ public sealed class DumpContainer
     public void UpdateContent(object? content)
     {
         Content = content;
+    }
+
+    /// <summary>
+    /// Appends content inside this container without replacing existing content.
+    /// Does nothing visible until the container has been dumped.
+    /// </summary>
+    public void AppendContent(object? content)
+    {
+        lock (_sync)
+        {
+            _contents.Add(content);
+            if (_isDumped) Write(true);
+        }
+    }
+
+    /// <summary>
+    /// Clears this container's content. The container's slot remains in place so subsequent
+    /// output ordering is unaffected.
+    /// </summary>
+    public void ClearContent()
+    {
+        lock (_sync)
+        {
+            _contents.Clear();
+            if (_isDumped) Write(true);
+        }
     }
 
     public void Refresh()
@@ -63,6 +121,17 @@ public sealed class DumpContainer
 
     private void Write(bool isUpdate)
     {
-        DumpExtension.Sink.ResultWrite(_content, null, _outputId, isUpdate);
+        var body = _contents.Count switch
+        {
+            0 => null,
+            1 => _contents[0],
+            _ => new VerticalSequence(_contents),
+        };
+
+        // Precedence: container properties > container Options > script-global defaults.
+        var options = DumpOptions.Merge(
+            new DumpOptions(Title: Title, CssClasses: CssClasses).MergeFrom(Options));
+
+        DumpExtension.Sink.ResultWrite(body, options, _outputId, isUpdate);
     }
 }
