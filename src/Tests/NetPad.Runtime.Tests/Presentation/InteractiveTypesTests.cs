@@ -98,6 +98,24 @@ public sealed class InteractiveTypesTests : IDisposable
         Assert.Equal(first, second);
     }
 
+    [Fact]
+    public void UrlRegistrationsAreRecreatedForAnewRun()
+    {
+        Util.BeginInteractiveRunScope();
+        var first = ExtractActionId(HtmlPresenter.Serialize(new Hyperlinq(new Uri("https://run.example/"))));
+
+        Util.BeginInteractiveRunScope();
+        try
+        {
+            var second = ExtractActionId(HtmlPresenter.Serialize(new Hyperlinq(new Uri("https://run.example/"))));
+            Assert.NotEqual(first, second);
+        }
+        finally
+        {
+            Util.EndInteractiveRunScope();
+        }
+    }
+
     private static string ExtractActionId(string html)
     {
         var marker = "data-netpad-action-id=\"";
@@ -207,6 +225,20 @@ public sealed class InteractiveTypesTests : IDisposable
         Assert.Equal(
             [(ResultHostCommand.ClearResults, null), (ResultHostCommand.HideEditor, null), (ResultHostCommand.AutoScrollResults, "true")],
             sent);
+    }
+
+    [Fact]
+    public void PanelCommandsSerializeTheirPanelName()
+    {
+        var sent = new List<(ResultHostCommand Command, string? Payload)>();
+        Util.OnResultHostCommand = (command, payload) => sent.Add((command, payload));
+
+        var panel = Util.OpenPanel("Panel A");
+        panel.Clear();
+        panel.Close();
+
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize("Panel A"), sent[0].Payload);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize("Panel A"), sent[1].Payload);
     }
 
     [Fact]

@@ -10,14 +10,14 @@ public static partial class Util
     /// Wraps an object so that ALL of its instance members are accessible dynamically,
     /// regardless of visibility, including inherited private members.
     /// </summary>
-    public static dynamic? Uncapsulate<T>(this T obj)
+    public static dynamic? Uncapsulate<T>(T obj)
         => obj is null ? default : new UncapsulatedObject(obj);
 
     /// <summary>
     /// Wraps a type so that ALL of its static members are accessible dynamically, regardless of
     /// visibility. Constructors can be invoked via <c>wrapper.New(args)</c>.
     /// </summary>
-    public static dynamic UncapsulateStatic(this Type type) => new UncapsulatedStatic(type);
+    public static dynamic UncapsulateStatic(Type type) => new UncapsulatedStatic(type);
 }
 
 internal static class ReflectionCoercion

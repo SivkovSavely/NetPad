@@ -27,6 +27,7 @@ ipc.On<ExpandOutputMessage>(msg => runner.ExpandOutput(msg));
 ipc.On<InvokeScriptActionMessage>(msg => runner.InvokeScriptAction(msg));
 ipc.On<CancelScriptMessage>(msg => runner.RequestSoftCancellation(msg));
 ipc.On<JsEvalResultMessage>(msg => runner.ReceiveJsEvalResult(msg));
+ipc.On<ChildScriptCompletedMessage>(msg => runner.ReceiveChildScriptCompleted(msg));
 ipc.Listen(defaultConsoleIn, _ => { });
 
 // Notify parent that this process (script-host) is ready.

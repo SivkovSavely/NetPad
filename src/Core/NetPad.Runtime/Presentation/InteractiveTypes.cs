@@ -177,8 +177,90 @@ public sealed class ResultPanel
     }
 
     /// <summary>Clears this panel's content.</summary>
-    public void Clear() => InteractiveResultHost.SendCommand(ResultHostCommand.ClearResults, Name);
+    public void Clear() => InteractiveResultHost.SendCommand(
+        ResultHostCommand.ClearResults,
+        System.Text.Json.JsonSerializer.Serialize(Name));
 
     /// <summary>Closes this panel.</summary>
-    public void Close() => InteractiveResultHost.SendCommand(ResultHostCommand.RemovePanel, Name);
+    public void Close() => InteractiveResultHost.SendCommand(
+        ResultHostCommand.RemovePanel,
+        System.Text.Json.JsonSerializer.Serialize(Name));
+}
+
+public enum ChildScriptRunStatus
+{
+    Pending,
+    Completed,
+    Failed,
+    Cancelled
+}
+
+public sealed record ChildScriptResult(
+    bool Succeeded,
+    IReadOnlyList<ScriptOutput> Output,
+    string? Error);
+
+/// <summary>
+/// Handle for a child script started with <c>Util.RunAsync</c>.
+/// </summary>
+public sealed class ChildScriptRun
+{
+    private readonly TaskCompletionSource<ChildScriptResult> _completion =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private ChildScriptResult? _result;
+
+    internal ChildScriptRun(Guid correlationId, string path)
+    {
+        CorrelationId = correlationId;
+        Path = path;
+    }
+
+    public Guid CorrelationId { get; }
+
+    public string Path { get; }
+
+    public Task<ChildScriptResult> Completion => _completion.Task;
+
+    public ChildScriptRunStatus Status
+        => _result is null
+            ? ChildScriptRunStatus.Pending
+            : _result.Succeeded ? ChildScriptRunStatus.Completed : ChildScriptRunStatus.Failed;
+
+    public bool Succeeded => _result?.Succeeded == true;
+
+    public bool Failed => _result is { Succeeded: false };
+
+    public IReadOnlyList<ScriptOutput> Output => _result?.Output ?? [];
+
+    public string? Error => _result?.Error;
+
+    /// <summary>Dumps the captured child output into the parent results stream.</summary>
+    public void DumpToParent()
+    {
+        if (_result is null)
+        {
+            throw new InvalidOperationException("The child script has not completed.");
+        }
+
+        foreach (var output in _result.Output)
+        {
+            if (output.Body is null) continue;
+
+            if (output.Format == ScriptOutputFormat.Html)
+            {
+                DumpExtension.Sink.ResultWrite(TextNode.RawText(output.Body));
+            }
+            else
+            {
+                DumpExtension.Sink.ResultWrite(output.Body);
+            }
+        }
+    }
+
+    internal void Complete(bool succeeded, string? error, IReadOnlyList<ScriptOutput>? output)
+    {
+        var result = new ChildScriptResult(succeeded, output ?? [], error);
+        _result = result;
+        _completion.TrySetResult(result);
+    }
 }

@@ -33,11 +33,12 @@ export class OutputModel {
     /**
      * Gets or creates the dump container for a named result panel.
      */
-    public getOrCreatePanel(name: string): DumpContainer {
+    public getOrCreatePanel(name: string, configure?: (container: DumpContainer) => void): DumpContainer {
         let container = this.panels.get(name);
 
         if (!container) {
             container = new DumpContainer(this.settings);
+            configure?.(container);
             this.panels.set(name, container);
             this.panelNames = [...this.panels.keys()];
         }

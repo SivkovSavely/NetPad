@@ -57,4 +57,24 @@ public sealed class JsEvalBridgeTests
         var request = Assert.Single(sent);
         bridge.Receive(new JsEvalResultMessage(request.CorrelationId, "\"late\"", null)); // Must not throw.
     }
+
+    [Fact]
+    public async Task ResetCompletesPendingEvaluationAndRejectsLateResult()
+    {
+        var sent = new List<RequestJsEvalMessage>();
+        var bridge = new JsEvalBridge(message => sent.Add(message));
+
+        var evaluation = bridge.EvaluateAsync("oldRun()", 5_000);
+        while (sent.Count == 0)
+        {
+            await Task.Yield();
+        }
+
+        bridge.Reset("run restarted");
+
+        var exception = await Assert.ThrowsAsync<Exception>(() => evaluation);
+        Assert.Contains("run restarted", exception.Message);
+
+        bridge.Receive(new JsEvalResultMessage(sent[0].CorrelationId, "\"late\"", null));
+    }
 }

@@ -29,6 +29,8 @@ public class ScriptRunner
 
         // Allows scripts to request other scripts to be opened and run in the parent app (Util.Run).
         Util.OnRequestRunScript = path => _ipcGateway.Send(new RunScriptFromPathMessage(path));
+        Util.OnRequestChildScript = (correlationId, path) =>
+            _ipcGateway.Send(new RunChildScriptMessage(correlationId, path));
 
         // JavaScript evaluation requests are relayed through the parent app into the script's results view.
         _jsEvalBridge = new JsEvalBridge(request => _ipcGateway.Send(request));
@@ -42,6 +44,7 @@ public class ScriptRunner
     public void Run(RunScriptMessage message)
     {
         // Fresh cancellation token and cleared interactive registrations for each run.
+        _jsEvalBridge.Reset("The previous script run was discarded.");
         Util.BeginInteractiveRunScope();
 
         Util.Stopwatch.Reset();
@@ -189,6 +192,11 @@ public class ScriptRunner
     public void ReceiveJsEvalResult(JsEvalResultMessage message)
     {
         _jsEvalBridge.Receive(message);
+    }
+
+    public void ReceiveChildScriptCompleted(ChildScriptCompletedMessage message)
+    {
+        Util.ReceiveChildScriptCompleted(message);
     }
 
     private void StartForwardingMemCacheItemInfoChanges()

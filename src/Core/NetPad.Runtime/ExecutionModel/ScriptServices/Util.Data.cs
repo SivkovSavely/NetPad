@@ -43,19 +43,42 @@ public static partial class Util
 
         try
         {
-            if (!enumerator.MoveNext())
+            var prefix = new List<object?>();
+            object? firstNonNull = null;
+
+            // Keep leading nulls while discovering the row shape. Null rows are valid CSV rows
+            // and must not make the whole sequence disappear.
+            while (enumerator.MoveNext())
             {
+                prefix.Add(enumerator.Current);
+                if (enumerator.Current is not null)
+                {
+                    firstNonNull = enumerator.Current;
+                    break;
+                }
+            }
+
+            if (firstNonNull is null)
+            {
+                if (options.IncludeHeader)
+                {
+                    csvWriter.WriteRawRow("Value");
+                }
+
+                foreach (var _ in prefix)
+                {
+                    writer.Write(options.NewLine);
+                }
+
+                while (enumerator.MoveNext())
+                {
+                    writer.Write(options.NewLine);
+                }
+
                 return;
             }
 
-            var first = enumerator.Current;
-
-            if (first == null)
-            {
-                return;
-            }
-
-            var shape = ClassifyRow(first);
+            var shape = ClassifyRow(firstNonNull);
 
             if (shape.Kind == CsvShapeKind.Dictionary)
             {
@@ -81,7 +104,11 @@ public static partial class Util
                     rows.Add(row);
                 }
 
-                Collect(first);
+                foreach (var item in prefix)
+                {
+                    Collect(item);
+                }
+
                 while (enumerator.MoveNext())
                 {
                     Collect(enumerator.Current);
@@ -112,7 +139,20 @@ public static partial class Util
                 }
             }
 
-            do
+            foreach (var item in prefix)
+            {
+                if (shape.Kind == CsvShapeKind.Scalar)
+                {
+                    csvWriter.WriteEscaped(FormatCsvValue(item, options));
+                    writer.Write(options.NewLine);
+                }
+                else
+                {
+                    csvWriter.WritePropertyRow(item!, shape.Columns!);
+                }
+            }
+
+            while (enumerator.MoveNext())
             {
                 var item = enumerator.Current;
 
@@ -123,9 +163,9 @@ public static partial class Util
                 }
                 else
                 {
-                    csvWriter.WritePropertyRow(item!, shape.Columns!);
+                    csvWriter.WritePropertyRow(item, shape.Columns!);
                 }
-            } while (enumerator.MoveNext());
+            }
         }
         finally
         {
@@ -226,9 +266,8 @@ public static partial class Util
             writer.Write(options.NewLine);
         }
 
-        public void WritePropertyRow(object item, List<string> columns)
+        public void WritePropertyRow(object? item, List<string> columns)
         {
-            var type = item.GetType();
             var first = true;
 
             foreach (var column in columns)
@@ -236,7 +275,7 @@ public static partial class Util
                 if (!first) writer.Write(options.Delimiter);
                 first = false;
 
-                var value = type.GetProperty(column)?.GetValue(item);
+                var value = item?.GetType().GetProperty(column)?.GetValue(item);
                 WriteEscaped(FormatCsvValue(value, options));
             }
 
@@ -363,4 +402,3 @@ public static partial class Util
 
     #endregion
 }
-

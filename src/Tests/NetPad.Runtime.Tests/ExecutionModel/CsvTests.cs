@@ -123,6 +123,14 @@ public sealed class CsvTests : IDisposable
     }
 
     [Fact]
+    public void LeadingNullRowsArePreserved()
+    {
+        var csv = Util.ToCsvString(new object?[] { null, 1 });
+
+        Assert.Equal("Value\r\n\r\n1\r\n", csv);
+    }
+
+    [Fact]
     public void WriteCsv_StreamsToFile()
     {
         var path = TempPath();

@@ -28,6 +28,7 @@ import {OutputModel} from "./output-model";
 import {DisposableCollection, KeyCode} from "@common";
 import {FindTextBox} from "@application/find-text-box/find-text-box";
 import {DumpContainer} from "./components/dump-container";
+import {parsePanelPayload} from "./panel-command";
 
 export class OutputPane extends Pane {
     public outputModels = new Map<string, OutputModel>();
@@ -132,7 +133,9 @@ export class OutputPane extends Pane {
                 // Named result panel outputs are routed to their own containers.
                 if (msg.output.panelName) {
                     if (msg.output.kind === "Result" || msg.output.kind === "Error") {
-                        const container = model.getOrCreatePanel(msg.output.panelName);
+                        const container = model.getOrCreatePanel(
+                            msg.output.panelName,
+                            container => this.wireContainerCallbacks(environment.script.id, container));
                         container.appendOutput(msg.output);
 
                         if (this.current === model && this.activeTab !== msg.output.panelName && this.activeTab !== "SQL") {
@@ -238,7 +241,14 @@ export class OutputPane extends Pane {
 
         switch (msg.command) {
             case "ClearResults":
-                model.resultsDumpContainer.clearOutput(true);
+                {
+                    const panelName = parsePanelPayload(msg.payloadJson);
+                    if (panelName) {
+                        model.panels.get(panelName)?.clearOutput(true);
+                    } else {
+                        model.resultsDumpContainer.clearOutput(true);
+                    }
+                }
                 break;
 
             case "HideEditor":
@@ -270,8 +280,9 @@ export class OutputPane extends Pane {
                 const name = parsePanelPayload(msg.payloadJson);
                 if (!name) break;
 
-                const container = model.getOrCreatePanel(name);
-                this.wireContainerCallbacks(environment.script.id, container);
+                model.getOrCreatePanel(
+                    name,
+                    container => this.wireContainerCallbacks(environment.script.id, container));
 
                 if (isActive) this.activeTab = name;
                 break;
@@ -476,17 +487,6 @@ export class OutputPane extends Pane {
         };
 
         this.disposables.add(() => bc.close());
-    }
-}
-
-function parsePanelPayload(payloadJson?: string | null): string | null {
-    if (!payloadJson) return null;
-
-    try {
-        const parsed = JSON.parse(payloadJson);
-        return typeof parsed === "string" ? parsed : null;
-    } catch {
-        return null;
     }
 }
 

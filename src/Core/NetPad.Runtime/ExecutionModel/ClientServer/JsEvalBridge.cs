@@ -52,6 +52,21 @@ public sealed class JsEvalBridge(Action<RequestJsEvalMessage> send)
 
         pending.TrySetResult(new JsEvalOutcome(message.ResultJson, message.Error));
     }
+
+    /// <summary>
+    /// Completes all requests from a run that is being discarded. Later responses for those
+    /// correlation ids are ignored because they have been removed from the pending map.
+    /// </summary>
+    public void Reset(string error)
+    {
+        foreach (var pair in _pending.ToArray())
+        {
+            if (_pending.TryRemove(pair.Key, out var pending))
+            {
+                pending.TrySetResult(new JsEvalOutcome(null, error));
+            }
+        }
+    }
 }
 
 public readonly record struct JsEvalOutcome(string? ResultJson, string? Error);

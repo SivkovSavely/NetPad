@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using NetPad.Configuration;
 using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.Presentation;
@@ -10,6 +11,7 @@ public static partial class Util
     #region Run scope (cancellation, registries)
 
     private static CancellationTokenSource? _queryCancelCts;
+    private static readonly ConcurrentDictionary<Guid, ChildScriptRun> ChildRuns = new();
 
     /// <summary>
     /// The cancellation token for the current run. Cancelled when the user requests cancellation,
@@ -30,8 +32,15 @@ public static partial class Util
         _softCancellationRequested = false;
         _nextUserInputMasked = false;
 
+        foreach (var childRun in ChildRuns.Values)
+        {
+            childRun.Complete(false, "The parent script run was restarted.", []);
+        }
+        ChildRuns.Clear();
+
         ClearOnDemandRegistry();
         ScriptActionRegistry.Clear();
+        UtilHyperlinqRegistry.Clear();
         HtmlHeadState.Reset();
         OutputRouting.Reset();
         KeepRunningManager.Reset();
@@ -126,6 +135,68 @@ public static partial class Util
     /// </summary>
     public static LatexContent Latex(string latex, bool displayMode = true)
         => new(latex, displayMode);
+
+    #endregion
+
+    #region Child scripts
+
+    internal static Action<Guid, string>? OnRequestChildScript { get; set; }
+
+    /// <summary>
+    /// Starts another script as an isolated child run and returns a handle whose
+    /// <see cref="ChildScriptRun.Completion"/> task completes when it finishes.
+    /// </summary>
+    public static Task<ChildScriptRun> RunAsync(
+        string scriptPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(scriptPath))
+        {
+            throw new ArgumentException("Value cannot be null or whitespace.", nameof(scriptPath));
+        }
+
+        if (!File.Exists(scriptPath))
+        {
+            throw new FileNotFoundException("Script file not found.", scriptPath);
+        }
+
+        var request = OnRequestChildScript;
+        if (request == null)
+        {
+            throw new NotSupportedException(
+                "Child script runs are only supported when the script runs inside the NetPad app.");
+        }
+
+        var correlationId = Guid.NewGuid();
+        var childRun = new ChildScriptRun(correlationId, Path.GetFullPath(scriptPath));
+        ChildRuns[correlationId] = childRun;
+
+        if (cancellationToken.CanBeCanceled)
+        {
+            cancellationToken.Register(() =>
+            {
+                if (ChildRuns.TryRemove(correlationId, out var cancelled))
+                {
+                    cancelled.Complete(false, "The child script run was cancelled.", []);
+                }
+            });
+        }
+
+        request(correlationId, childRun.Path);
+        return Task.FromResult(childRun);
+    }
+
+    /// <summary>Starts a child script and synchronously returns its handle.</summary>
+    public static ChildScriptRun RunChild(string scriptPath)
+        => RunAsync(scriptPath).GetAwaiter().GetResult();
+
+    internal static void ReceiveChildScriptCompleted(ChildScriptCompletedMessage message)
+    {
+        if (ChildRuns.TryRemove(message.CorrelationId, out var childRun))
+        {
+            childRun.Complete(message.Success, message.Error, message.Output ?? []);
+        }
+    }
 
     #endregion
 
@@ -232,7 +303,9 @@ public static partial class Util
             throw new ArgumentException("Panel name cannot be null or empty.", nameof(name));
         }
 
-        InteractiveResultHost.SendCommand(ResultHostCommand.OpenPanel, name);
+        InteractiveResultHost.SendCommand(
+            ResultHostCommand.OpenPanel,
+            System.Text.Json.JsonSerializer.Serialize(name));
         return new ResultPanel(name);
     }
 
@@ -352,6 +425,8 @@ internal static class UtilHyperlinqRegistry
     public static string RegisterUrl(string url)
         => UrlToActionId.GetOrAdd(url, u => ScriptActionRegistry.Register(() =>
             ExecutionModel.ScriptServices.Util.OpenUrl(u)));
+
+    public static void Clear() => UrlToActionId.Clear();
 }
 
 /// <summary>
