@@ -98,6 +98,9 @@ public class ScriptsController(IMediator mediator, IScriptRepository scriptRepos
         if (dto.UseAspNet != null)
             script.Config.SetUseAspNet(dto.UseAspNet.Value);
 
+        if (dto.CheckedArithmetic != null)
+            script.Config.SetCheckedArithmetic(dto.CheckedArithmetic.Value);
+
         if (dto.Namespaces != null)
             script.Config.SetNamespaces(dto.Namespaces);
 
@@ -292,6 +295,14 @@ public class ScriptsController(IMediator mediator, IScriptRepository scriptRepos
 
         await mediator.Send(new UpdateScriptUseAspNetCommand(environment.Script, useAspNet));
 
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/checked-arithmetic")]
+    public async Task<IActionResult> SetCheckedArithmetic(Guid id, [FromBody] bool checkedArithmetic)
+    {
+        var environment = await GetScriptEnvironmentAsync(id);
+        await mediator.Send(new UpdateScriptCheckedArithmeticCommand(environment.Script, checkedArithmetic));
         return NoContent();
     }
 

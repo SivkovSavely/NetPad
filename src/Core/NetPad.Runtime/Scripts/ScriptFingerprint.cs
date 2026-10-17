@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using NetPad.Application;
+using NetPad.Compilation.Directives;
 using NetPad.Common;
 using NetPad.DotNet;
 using NetPad.DotNet.References;
@@ -27,6 +28,9 @@ public record ScriptFingerprint(
     Guid? DataConnectionId
 )
 {
+    public string LoadedSourcesHash { get; init; } = string.Empty;
+    public bool CheckedArithmetic { get; init; } = true;
+
     private static readonly JsonSerializerOptions _serializerOptions = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
@@ -108,7 +112,9 @@ public record ScriptFingerprint(
             script.Config.TargetFrameworkVersion,
             script.Config.OptimizationLevel,
             script.Config.UseAspNet,
-            script.DataConnection?.Id
+            script.DataConnection?.Id,
+            script.Path,
+            script.Config.CheckedArithmetic
         );
     }
 
@@ -123,6 +129,8 @@ public record ScriptFingerprint(
     /// <param name="optimizationLevel">The compiler optimization level.</param>
     /// <param name="useAspNet">Indicates whether the script uses ASP.NET features.</param>
     /// <param name="dataConnectionId">An optional identifier for the associated data connection.</param>
+    /// <param name="sourcePath">The script path used to resolve and fingerprint loaded sources.</param>
+    /// <param name="checkedArithmetic">Whether compilation enables overflow checking.</param>
     /// <returns>
     /// A <see cref="ScriptFingerprint"/> that uniquely represents the provided script
     /// components and its configuration.
@@ -139,7 +147,9 @@ public record ScriptFingerprint(
         DotNetFrameworkVersion targetFrameworkVersion,
         OptimizationLevel optimizationLevel,
         bool useAspNet,
-        Guid? dataConnectionId
+        Guid? dataConnectionId,
+        string? sourcePath = null,
+        bool checkedArithmetic = true
     )
     {
         var codeHash = HashCode(code);
@@ -163,7 +173,11 @@ public record ScriptFingerprint(
             OptimizationLevel: optimizationLevel,
             UseAspNet: useAspNet,
             DataConnectionId: dataConnectionId
-        );
+        )
+        {
+            LoadedSourcesHash = LoadDirectiveProcessor.Process(code, sourcePath).InputHash,
+            CheckedArithmetic = checkedArithmetic
+        };
     }
 
     private static string HashCode(string code) => Sha256Hex(code);

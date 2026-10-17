@@ -1,3 +1,5 @@
+using System.Reflection;
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 using NetPad.CodeAnalysis;
 using NetPad.Compilation;
@@ -58,6 +60,44 @@ public class CSharpCodeCompilerTests(ITestOutputHelper testOutputHelper)
 
         Assert.False(result.Success);
         Assert.NotEmpty(result.Diagnostics);
+    }
+
+    [Fact]
+    public void Returns_Source_Generator_Diagnostics_Alongside_Emit_Diagnostics()
+    {
+        var code = GetProgram("int unused = 0;");
+        var input = new CompilationInput(code, DotNetFrameworkVersion.DotNet6,
+            assemblyFileReferences: [typeof(DiagnosticSourceGenerator).Assembly.Location]);
+
+        var result = CreateCSharpCodeCompiler().Compile(input);
+
+        Assert.Contains(result.Diagnostics, d => d.Id == DiagnosticSourceGenerator.DiagnosticId);
+        Assert.Contains(result.Diagnostics, d => d.Id == "CS0219");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Overflow_Checks_Control_Arithmetic_Behavior(bool enabled)
+    {
+        const string code = "public class Program { public static int Run(int value) => value + 1; public static void Main() { } }";
+        var input = new CompilationInput(code, DotNetFrameworkVersion.DotNet9)
+            .WithAssemblyName($"OverflowChecks_{enabled}")
+            .WithOverflowChecks(enabled);
+
+        var result = CreateCSharpCodeCompiler().Compile(input);
+
+        Assert.True(result.Success, result.Diagnostics.Select(d => d.GetMessage()).JoinToString("|"));
+        var method = Assembly.Load(result.AssemblyBytes).GetType("Program")!.GetMethod("Run")!;
+        if (enabled)
+        {
+            var exception = Assert.Throws<TargetInvocationException>(() => method.Invoke(null, [int.MaxValue]));
+            Assert.IsType<OverflowException>(exception.InnerException);
+        }
+        else
+        {
+            Assert.Equal(int.MinValue, method.Invoke(null, [int.MaxValue]));
+        }
     }
 
     [Theory]
@@ -166,3 +206,28 @@ public class Program
 ";
     }
 }
+
+#pragma warning disable RS1036, RS1041, RS1042, RS2008
+[Generator]
+public class DiagnosticSourceGenerator : ISourceGenerator
+{
+    public const string DiagnosticId = "NPADGEN001";
+
+    private static readonly DiagnosticDescriptor Rule = new(
+        DiagnosticId,
+        "Test generator diagnostic",
+        "Test generator diagnostic",
+        "Testing",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    public void Initialize(GeneratorInitializationContext context)
+    {
+    }
+
+    public void Execute(GeneratorExecutionContext context)
+    {
+        context.ReportDiagnostic(Diagnostic.Create(Rule, Location.None));
+    }
+}
+#pragma warning restore RS1036, RS1041, RS1042, RS2008

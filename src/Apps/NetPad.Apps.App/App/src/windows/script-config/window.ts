@@ -37,6 +37,7 @@ export class Window extends WindowBase {
             await this.scriptService.setScriptNamespaces(this.script.id, this.configStore.namespaces as string[]);
             await this.scriptService.setReferences(this.script.id, this.configStore.references as Reference[]);
             await this.scriptService.setUseAspNet(this.script.id, this.configStore.useAspNet);
+            await this.scriptService.setCheckedArithmetic(this.script.id, this.configStore.checkedArithmetic);
 
             await this.windowService.close();
         } catch (ex) {

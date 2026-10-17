@@ -139,6 +139,7 @@ public class Script : INotifyOnPropertyChanged
         Config.SetTargetFrameworkVersion(config.TargetFrameworkVersion);
         Config.SetOptimizationLevel(config.OptimizationLevel);
         Config.SetUseAspNet(config.UseAspNet);
+        Config.SetCheckedArithmetic(config.CheckedArithmetic);
         Config.SetReferences(config.References);
         Config.SetNamespaces(config.Namespaces);
     }

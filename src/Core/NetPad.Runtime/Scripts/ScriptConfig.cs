@@ -15,7 +15,8 @@ public class ScriptConfig(
     IList<string>? namespaces = null,
     IList<Reference>? references = null,
     OptimizationLevel optimizationLevel = OptimizationLevel.Debug,
-    bool useAspNet = false)
+    bool useAspNet = false,
+    bool checkedArithmetic = true)
     : INotifyOnPropertyChanged
 {
     private List<string> _namespaces = namespaces?.ToList() ?? [];
@@ -24,6 +25,7 @@ public class ScriptConfig(
     private DotNetFrameworkVersion _targetFrameworkVersion = targetFrameworkVersion;
     private OptimizationLevel _optimizationLevel = optimizationLevel;
     private bool _useAspNet = useAspNet;
+    private bool _checkedArithmetic = checkedArithmetic;
 
     [JsonIgnore] public List<Func<PropertyChangedArgs, Task>> OnPropertyChanged { get; } = [];
 
@@ -49,6 +51,12 @@ public class ScriptConfig(
     {
         get => _useAspNet;
         private set => this.RaiseAndSetIfChanged(ref _useAspNet, value);
+    }
+
+    public bool CheckedArithmetic
+    {
+        get => _checkedArithmetic;
+        private set => this.RaiseAndSetIfChanged(ref _checkedArithmetic, value);
     }
 
     public List<string> Namespaces
@@ -88,6 +96,13 @@ public class ScriptConfig(
     {
         if (use != _useAspNet)
             UseAspNet = use;
+        return this;
+    }
+
+    public ScriptConfig SetCheckedArithmetic(bool use)
+    {
+        if (use != CheckedArithmetic)
+            CheckedArithmetic = use;
         return this;
     }
 

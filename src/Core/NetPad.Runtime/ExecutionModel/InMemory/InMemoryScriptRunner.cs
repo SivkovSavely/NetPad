@@ -168,7 +168,8 @@ public sealed class InMemoryScriptRunner : IScriptRunner
                 fullProgram,
                 _script.Config.TargetFrameworkVersion,
                 referenceAssemblyImages.Select(a => a.Image).ToHashSet(),
-                referenceAssemblyPaths));
+                referenceAssemblyPaths)
+            .WithOverflowChecks(_script.Config.CheckedArithmetic));
 
         if (!compilationResult.Success)
         {

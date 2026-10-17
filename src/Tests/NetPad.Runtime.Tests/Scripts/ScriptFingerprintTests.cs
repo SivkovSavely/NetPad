@@ -78,6 +78,34 @@ public class ScriptFingerprintTests
     }
 
     [Fact]
+    public void Loaded_Source_Content_Changes_Fingerprint()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var loadedPath = Path.Combine(directory, "child.cs");
+            var scriptPath = Path.Combine(directory, "root.cs");
+            File.WriteAllText(loadedPath, "var loaded = 1;");
+
+            var first = ScriptFingerprint.Create(
+                "#load \"child.cs\"", [], [], ScriptKind.Program, DotNetFrameworkVersion.DotNet9,
+                OptimizationLevel.Debug, false, null, scriptPath);
+            File.WriteAllText(loadedPath, "var loaded = 2;");
+            var second = ScriptFingerprint.Create(
+                "#load \"child.cs\"", [], [], ScriptKind.Program, DotNetFrameworkVersion.DotNet9,
+                OptimizationLevel.Debug, false, null, scriptPath);
+
+            Assert.NotEqual(first.LoadedSourcesHash, second.LoadedSourcesHash);
+            Assert.NotEqual(first.CalculateHash(), second.CalculateHash());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Namespaces_Are_OrderInsensitive_And_Deduplicated()
     {
         var a = Make(
@@ -135,6 +163,18 @@ public class ScriptFingerprintTests
 
         Assert.NotEqual(a.CalculateHash(), b.CalculateHash());
         Assert.NotEqual(a.CalculateUuid(), b.CalculateUuid());
+    }
+
+    [Fact]
+    public void Toggling_CheckedArithmetic_Changes_Hash_And_Uuid()
+    {
+        var checkedFingerprint = Make("x", ["System"]);
+        var uncheckedFingerprint = ScriptFingerprint.Create(
+            "x", ["System"], [], ScriptKind.Program, DotNetFrameworkVersion.DotNet9,
+            OptimizationLevel.Debug, false, null, checkedArithmetic: false);
+
+        Assert.NotEqual(checkedFingerprint.CalculateHash(), uncheckedFingerprint.CalculateHash());
+        Assert.NotEqual(checkedFingerprint.CalculateUuid(), uncheckedFingerprint.CalculateUuid());
     }
 
     [Fact]

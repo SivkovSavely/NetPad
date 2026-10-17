@@ -43,6 +43,11 @@ public class CreateScriptDto
     public bool? UseAspNet { get; set; }
 
     /// <summary>
+    /// Whether arithmetic overflow is checked. Defaults to true when not specified.
+    /// </summary>
+    public bool? CheckedArithmetic { get; set; }
+
+    /// <summary>
     /// Namespaces to include in the script. If specified, replaces the default namespaces entirely.
     /// When null, the standard default namespaces are used.
     /// </summary>

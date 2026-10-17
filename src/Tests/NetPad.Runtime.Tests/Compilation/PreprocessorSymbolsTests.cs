@@ -100,4 +100,30 @@ public class PreprocessorSymbolsTests
         var symbols = PreprocessorSymbols.For(level, version);
         Assert.Equal(expectedSymbols, symbols);
     }
+
+    [Fact]
+    public void Gui_Context_Adds_Gui_Symbol()
+    {
+        var symbols = PreprocessorSymbols.For(
+            OptimizationLevel.Debug,
+            DotNetFrameworkVersion.DotNet9,
+            ScriptCompilationContext.Gui);
+
+        Assert.Contains("NETPAD_GUI", symbols);
+        Assert.DoesNotContain("NETPAD_CLI", symbols);
+        Assert.DoesNotContain("CMD", symbols);
+    }
+
+    [Fact]
+    public void Headless_Context_Adds_Cli_And_Cmd_Symbols()
+    {
+        var symbols = PreprocessorSymbols.For(
+            OptimizationLevel.Release,
+            DotNetFrameworkVersion.DotNet9,
+            ScriptCompilationContext.Headless);
+
+        Assert.Contains("NETPAD_CLI", symbols);
+        Assert.Contains("CMD", symbols);
+        Assert.DoesNotContain("NETPAD_GUI", symbols);
+    }
 }

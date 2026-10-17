@@ -14,23 +14,25 @@ public class CodeAnalysisService : ICodeAnalysisService
 {
     internal CSharpParseOptions GetParseOptions(
         DotNetFrameworkVersion targetFrameworkVersion,
-        OptimizationLevel optimizationLevel)
+        OptimizationLevel optimizationLevel,
+        ScriptCompilationContext context = ScriptCompilationContext.Gui)
     {
         return CSharpParseOptions.Default
             .WithLanguageVersion(targetFrameworkVersion.GetLatestSupportedCSharpLanguageVersion())
             // TODO investigate using SourceCodeKind.Script (see cs-scripts branch)
             .WithKind(SourceCodeKind.Regular)
-            .WithPreprocessorSymbols(PreprocessorSymbols.For(optimizationLevel, targetFrameworkVersion));
+            .WithPreprocessorSymbols(PreprocessorSymbols.For(optimizationLevel, targetFrameworkVersion, context));
     }
 
     public SyntaxTree GetSyntaxTree(
         string code,
         DotNetFrameworkVersion targetFrameworkVersion,
         OptimizationLevel optimizationLevel,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ScriptCompilationContext context = ScriptCompilationContext.Gui)
     {
         var sourceText = SourceText.From(code);
-        var parseOptions = GetParseOptions(targetFrameworkVersion, optimizationLevel);
+        var parseOptions = GetParseOptions(targetFrameworkVersion, optimizationLevel, context);
 
         return SyntaxFactory.ParseSyntaxTree(sourceText, parseOptions, cancellationToken: cancellationToken);
     }

@@ -1900,6 +1900,8 @@ export interface IScriptsApiClient {
 
     setUseAspNet(id: string, useAspNet: boolean, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
 
+    setCheckedArithmetic(id: string, checkedArithmetic: boolean, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
+
     setDataConnection(id: string, dataConnectionId: string | null | undefined, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
 
     dumpMemCacheItem(id: string, key: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
@@ -2791,6 +2793,52 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
     }
 
     protected processSetUseAspNet(response: Response): Promise<FileResponse | null> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse | null>(null as any);
+    }
+
+    setCheckedArithmetic(id: string, checkedArithmetic: boolean, signal?: AbortSignal): Promise<FileResponse | null> {
+        let url_ = this.baseUrl + "/scripts/{id}/checked-arithmetic";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(checkedArithmetic);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processSetCheckedArithmetic(_response);
+        });
+    }
+
+    protected processSetCheckedArithmetic(response: Response): Promise<FileResponse | null> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200 || status === 206) {
@@ -6693,6 +6741,7 @@ export class ScriptConfig implements IScriptConfig {
     targetFrameworkVersion!: DotNetFrameworkVersion;
     optimizationLevel!: OptimizationLevel;
     useAspNet!: boolean;
+    checkedArithmetic!: boolean;
     namespaces!: string[];
     references!: Reference[];
 
@@ -6704,6 +6753,7 @@ export class ScriptConfig implements IScriptConfig {
             }
         }
         if (!data) {
+            this.checkedArithmetic = true;
             this.namespaces = [];
             this.references = [];
         }
@@ -6715,6 +6765,7 @@ export class ScriptConfig implements IScriptConfig {
             this.targetFrameworkVersion = _data["targetFrameworkVersion"];
             this.optimizationLevel = _data["optimizationLevel"];
             this.useAspNet = _data["useAspNet"];
+            this.checkedArithmetic = _data["checkedArithmetic"] ?? true;
             if (Array.isArray(_data["namespaces"])) {
                 this.namespaces = [] as any;
                 for (let item of _data["namespaces"])
@@ -6741,6 +6792,7 @@ export class ScriptConfig implements IScriptConfig {
         data["targetFrameworkVersion"] = this.targetFrameworkVersion;
         data["optimizationLevel"] = this.optimizationLevel;
         data["useAspNet"] = this.useAspNet;
+        data["checkedArithmetic"] = this.checkedArithmetic;
         if (Array.isArray(this.namespaces)) {
             data["namespaces"] = [];
             for (let item of this.namespaces)
@@ -6768,6 +6820,7 @@ export interface IScriptConfig {
     targetFrameworkVersion: DotNetFrameworkVersion;
     optimizationLevel: OptimizationLevel;
     useAspNet: boolean;
+    checkedArithmetic?: boolean | undefined;
     namespaces: string[];
     references: Reference[];
 }

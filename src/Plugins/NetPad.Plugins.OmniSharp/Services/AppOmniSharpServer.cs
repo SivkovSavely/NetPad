@@ -81,6 +81,9 @@ public class AppOmniSharpServer(
             false);
 
         await Project.SetProjectGroupItemAsync("AllowUnsafeBlocks", "true");
+        await Project.SetProjectGroupItemAsync(
+            "CheckForOverflowUnderflow",
+            environment.Script.Config.CheckedArithmetic ? "true" : "false");
 
         await SetPreprocessorSymbolsAsync();
 
@@ -126,7 +129,10 @@ public class AppOmniSharpServer(
             // Remove the existing group
             existing?.Remove();
 
-            var symbols = string.Join(";", PreprocessorSymbols.For(environment.Script.Config.OptimizationLevel)) + ";";
+            var symbols = string.Join(";", PreprocessorSymbols.For(
+                environment.Script.Config.OptimizationLevel,
+                environment.Script.Config.TargetFrameworkVersion,
+                ScriptCompilationContext.Gui)) + ";";
 
             // Add a new group
             root.Add(XElement.Parse(@$"<PropertyGroup>
@@ -567,6 +573,17 @@ public class AppOmniSharpServer(
             await Project.SetProjectAttributeAsync(
                 "Sdk",
                 DotNetCSharpProject.GetProjectSdkName(ev.NewValue ? DotNetSdkPack.AspNetApp : DotNetSdkPack.NetApp));
+            await NotifyOmniSharpServerProjectFileChangedAsync();
+            await eventBus.PublishAsync(new OmniSharpAsyncBufferUpdateCompletedEvent(environment.Script.Id));
+        });
+
+        Subscribe<ScriptCheckedArithmeticUpdatedEvent>(async ev =>
+        {
+            if (ev.Script.Id != environment.Script.Id) return;
+
+            await Project.SetProjectGroupItemAsync(
+                "CheckForOverflowUnderflow",
+                ev.NewValue ? "true" : "false");
             await NotifyOmniSharpServerProjectFileChangedAsync();
             await eventBus.PublishAsync(new OmniSharpAsyncBufferUpdateCompletedEvent(environment.Script.Id));
         });

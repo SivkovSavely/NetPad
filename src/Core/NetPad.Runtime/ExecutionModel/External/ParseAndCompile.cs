@@ -1,4 +1,5 @@
 using NetPad.Compilation;
+using NetPad.Compilation.Directives;
 using NetPad.DotNet;
 using NetPad.DotNet.CodeAnalysis;
 using NetPad.Scripts;
@@ -49,12 +50,13 @@ internal static class ParseAndCompile
         HashSet<string> referenceAssemblyPaths,
         SourceCodeCollection additionalCode)
     {
+        var loadedSources = LoadDirectiveProcessor.Process(code, script.Path);
         ParseAndCompileResult? asIsResult = null;
 
         for (var ixPerm = 0; ixPerm < _permutations.Count; ixPerm++)
         {
             var permutation = _permutations[ixPerm];
-            var pResult = permutation(code);
+            var pResult = permutation(loadedSources.Code);
 
             if (!pResult.shouldAttempt)
             {
@@ -68,7 +70,8 @@ internal static class ParseAndCompile
                 codeCompiler,
                 referenceAssemblyImages,
                 referenceAssemblyPaths,
-                additionalCode);
+                additionalCode,
+                loadedSources.AdditionalUsings);
 
             if (result.CompilationResult.Success)
             {
@@ -92,7 +95,8 @@ internal static class ParseAndCompile
         ICodeCompiler codeCompiler,
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
-        SourceCodeCollection additionalCode)
+        SourceCodeCollection additionalCode,
+        IReadOnlyList<string> additionalUsings)
     {
         var parsingResult = codeParser.Parse(
             script,
@@ -100,7 +104,8 @@ internal static class ParseAndCompile
             new CodeParsingOptions
             {
                 IncludeAspNetUsings = script.Config.UseAspNet,
-                AdditionalCode = additionalCode
+                AdditionalCode = additionalCode,
+                AdditionalUsings = additionalUsings.ToArray()
             });
 
         parsingResult.BootstrapperProgram.Code.Update(parsingResult.BootstrapperProgram.Code.Value?
@@ -116,7 +121,9 @@ internal static class ParseAndCompile
                 referenceAssemblyImages.Select(a => a.Image).ToHashSet(),
                 referenceAssemblyPaths)
             .WithOptimizationLevel(script.Config.OptimizationLevel)
-            .WithUseAspNet(script.Config.UseAspNet);
+            .WithUseAspNet(script.Config.UseAspNet)
+            .WithOverflowChecks(script.Config.CheckedArithmetic)
+            .WithCompilationContext(ScriptCompilationContext.Headless);
 
         var compilationResult = codeCompiler.Compile(compilationInput);
 

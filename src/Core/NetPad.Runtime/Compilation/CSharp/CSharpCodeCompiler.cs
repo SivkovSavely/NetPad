@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.IO;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
@@ -25,7 +26,7 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
         string assemblyFileExtension = GetCompiledAssemblyFileExtension(input.OutputKind);
         string assemblyFileName = $"{assemblyName}{assemblyFileExtension}";
 
-        var compilation = CreateCompilation(input, assemblyName);
+        var (compilation, generatorDiagnostics) = CreateCompilation(input, assemblyName);
 
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream,
@@ -39,15 +40,16 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
             new AssemblyName(assemblyName),
             assemblyFileName,
             assemblyBytes,
-            result.Diagnostics);
+            generatorDiagnostics.AddRange(result.Diagnostics));
     }
 
-    private CSharpCompilation CreateCompilation(CompilationInput input, string assemblyName)
+    private (CSharpCompilation Compilation, ImmutableArray<Diagnostic> GeneratorDiagnostics) CreateCompilation(CompilationInput input, string assemblyName)
     {
         SyntaxTree syntaxTree = codeAnalysisService.GetSyntaxTree(
             input.Code,
             input.TargetFrameworkVersion,
-            input.OptimizationLevel);
+            input.OptimizationLevel,
+            context: input.CompilationContext);
 
         // Build references to all assemblies we need to include in the compilation, starting with the assemblies
         // of the selected .NET SDK.
@@ -73,7 +75,7 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
         var compilationOptions = new CSharpCompilationOptions(input.OutputKind)
             .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
             .WithOptimizationLevel(input.OptimizationLevel)
-            .WithOverflowChecks(true)
+            .WithOverflowChecks(input.OverflowChecks)
             .WithAllowUnsafe(true);
 
         var compilation = CSharpCompilation.Create(
@@ -91,8 +93,8 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
             parseOptions: (CSharpParseOptions)compilation.SyntaxTrees[0].Options,
             optionsProvider: null);
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var sourceGenCompilation, out _);
-        return (CSharpCompilation)sourceGenCompilation;
+        driver.RunGeneratorsAndUpdateCompilation(compilation, out var sourceGenCompilation, out var generatorDiagnostics);
+        return ((CSharpCompilation)sourceGenCompilation, generatorDiagnostics);
     }
 
     private static PortableExecutableReference[] BuildMetadataReferences(

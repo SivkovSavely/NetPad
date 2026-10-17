@@ -54,6 +54,16 @@ public class CompilationInput(
     public bool UseAspNet { get; private set; }
 
     /// <summary>
+    /// Whether arithmetic operations should be checked for overflow.
+    /// </summary>
+    public bool OverflowChecks { get; private set; } = true;
+
+    /// <summary>
+    /// The execution context whose preprocessor symbols should be defined.
+    /// </summary>
+    public ScriptCompilationContext CompilationContext { get; private set; } = ScriptCompilationContext.Gui;
+
+    /// <summary>
     /// In-memory assemblies the code references and needs to compile.
     /// </summary>
     public HashSet<byte[]> AssemblyImageReferences { get; } = assemblyImageReferences ?? [];
@@ -84,6 +94,18 @@ public class CompilationInput(
     public CompilationInput WithOptimizationLevel(OptimizationLevel level)
     {
         OptimizationLevel = level;
+        return this;
+    }
+
+    public CompilationInput WithOverflowChecks(bool enabled)
+    {
+        OverflowChecks = enabled;
+        return this;
+    }
+
+    public CompilationInput WithCompilationContext(ScriptCompilationContext context)
+    {
+        CompilationContext = context;
         return this;
     }
 }

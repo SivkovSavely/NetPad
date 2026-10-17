@@ -60,7 +60,9 @@ public partial class ClientServerScriptRunner
             _script.Config.TargetFrameworkVersion,
             _script.Config.OptimizationLevel,
             _script.Config.UseAspNet,
-            _script.DataConnection?.Id
+            _script.DataConnection?.Id,
+            _script.Path,
+            _script.Config.CheckedArithmetic
         ).CalculateHash();
 
         // 2. Try compilation cache — local copy avoids TOCTOU if another thread invalidates

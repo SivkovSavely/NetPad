@@ -118,6 +118,7 @@ public static class ScriptSerializer
         public DotNetFrameworkVersion? TargetFrameworkVersion { get; set; }
         public OptimizationLevel OptimizationLevel { get; set; }
         public bool UseAspNet { get; set; }
+        public bool? CheckedArithmetic { get; set; }
         public List<string>? Namespaces { get; set; }
         public List<Reference>? References { get; set; }
 
@@ -129,6 +130,7 @@ public static class ScriptSerializer
                 TargetFrameworkVersion = config.TargetFrameworkVersion,
                 OptimizationLevel = config.OptimizationLevel,
                 UseAspNet = config.UseAspNet,
+                CheckedArithmetic = config.CheckedArithmetic,
                 Namespaces = config.Namespaces,
                 References = config.References
             };
@@ -142,7 +144,8 @@ public static class ScriptSerializer
                 Namespaces,
                 References,
                 OptimizationLevel,
-                UseAspNet
+                UseAspNet,
+                CheckedArithmetic ?? true
             );
         }
     }

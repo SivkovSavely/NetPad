@@ -1,4 +1,5 @@
 using System.Reflection;
+using NetPad.Compilation.Directives;
 using NetPad.Compilation.Scripts.Dependencies;
 using NetPad.DotNet;
 using NetPad.DotNet.CodeAnalysis;
@@ -48,6 +49,7 @@ public class ScriptCompiler(
         Script script,
         CancellationToken cancellationToken)
     {
+        var loadedSources = LoadDirectiveProcessor.Process(code, script.Path);
         var dependencies = await scriptDependencyResolver.GetDependenciesAsync(script, cancellationToken);
 
         if (cancellationToken.IsCancellationRequested)
@@ -80,11 +82,12 @@ public class ScriptCompiler(
             .ToHashSet();
 
         return TryPermutations(
-            code,
+            loadedSources.Code,
             script,
             referenceAssemblyImages,
             referenceAssemblyFiles,
             new SourceCodeCollection(dependencies.Code.SelectMany(x => x.Code)),
+            loadedSources.AdditionalUsings,
             cancellationToken);
     }
 
@@ -93,6 +96,7 @@ public class ScriptCompiler(
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
         SourceCodeCollection additionalCode,
+        IReadOnlyList<string> additionalUsings,
         CancellationToken cancellationToken)
     {
         ParseAndCompileResult? firstResult = null;
@@ -117,6 +121,7 @@ public class ScriptCompiler(
                 referenceAssemblyImages,
                 referenceAssemblyPaths,
                 additionalCode,
+                additionalUsings,
                 cancellationToken);
 
             if (result?.CompilationResult.Success == true)
@@ -139,6 +144,7 @@ public class ScriptCompiler(
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
         SourceCodeCollection additionalCode,
+        IReadOnlyList<string> additionalUsings,
         CancellationToken cancellationToken)
     {
         var parsingResult = codeParser.Parse(
@@ -147,7 +153,8 @@ public class ScriptCompiler(
             new CodeParsingOptions
             {
                 IncludeAspNetUsings = script.Config.UseAspNet,
-                AdditionalCode = additionalCode
+                AdditionalCode = additionalCode,
+                AdditionalUsings = additionalUsings.ToArray()
             });
 
         parsingResult.BootstrapperProgram.Code.Update(parsingResult.BootstrapperProgram.Code.Value?
@@ -168,7 +175,8 @@ public class ScriptCompiler(
                 referenceAssemblyImages.Select(a => a.Image).ToHashSet(),
                 referenceAssemblyPaths)
             .WithOptimizationLevel(script.Config.OptimizationLevel)
-            .WithUseAspNet(script.Config.UseAspNet);
+            .WithUseAspNet(script.Config.UseAspNet)
+            .WithOverflowChecks(script.Config.CheckedArithmetic);
 
         var compilationResult = codeCompiler.Compile(compilationInput);
 

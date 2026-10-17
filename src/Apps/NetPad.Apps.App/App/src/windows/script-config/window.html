@@ -12,6 +12,12 @@
                 </li>
             </ul>
 
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="checked-arithmetic"
+                       checked.bind="configStore.checkedArithmetic">
+                <label class="form-check-label" for="checked-arithmetic">Check arithmetic overflow</label>
+            </div>
+
             <div class="flex-grow-height-restricted d-flex flex-column" style="padding: 0 5px">
                 <reference-management show.bind="configStore.selectedTab.route === 'references'"
                                       class="tab-content"></reference-management>

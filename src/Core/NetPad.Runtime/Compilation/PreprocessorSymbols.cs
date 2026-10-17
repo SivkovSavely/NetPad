@@ -37,4 +37,19 @@ public static class PreprocessorSymbols
 
     public static string[] For(OptimizationLevel optimizationLevel, DotNetFrameworkVersion version) =>
         For(optimizationLevel).Union(For(version)).ToArray();
+
+    public static string[] For(
+        OptimizationLevel optimizationLevel,
+        DotNetFrameworkVersion version,
+        ScriptCompilationContext context)
+    {
+        var symbols = For(optimizationLevel, version).ToList();
+        symbols.Add(context == ScriptCompilationContext.Gui ? "NETPAD_GUI" : "NETPAD_CLI");
+        if (context == ScriptCompilationContext.Headless)
+        {
+            symbols.Add("CMD");
+        }
+
+        return symbols.ToArray();
+    }
 }
