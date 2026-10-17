@@ -64,9 +64,9 @@ Per-section above plus: benchmark cancellation terminates children; artifact cle
 
 ## Progress log
 
-- 2026-10-17: Implemented plan 07 after rebasing on `personal` (`d47b7594`). Added isolated BenchmarkDotNet selection runs with mutable output, cancellation and result charts; native/JIT disassembly and platform gating; F12 source/decompiled navigation with persistent identity-keyed cache; and `Util` decompile/IL/JIT helpers. Added focused backend/runtime/frontend tests. API client regenerated from Swagger; output-pane event call updated for the generated control-event signature.
-  - `22cd5fac` Implement benchmarking and code inspection
-  - `5f51b021` Persist decompiled source cache
-  - Focused validation passed: App tests 62/62, `UtilCodeInspectionTests` 9/9, focused Jest 4 suites/11 tests. Swagger generation and `git diff --check` passed.
-  - Broad validation remains limited by unrelated failures: full .NET tests hit the OmniSharp.NET `KeyValuePair.Deconstruct` compile error and a Runtime test requiring unavailable .NET 7 reference assemblies; full Jest had 44/45 suites pass, with the existing chart-view fallback assertion failing. `tsc --noEmit` reports three existing errors in `scripts-list.ts`, `file-viewer.ts`, and `settings/window.ts`.
+- 2026-10-17: Implemented plan 07 after rebasing on latest `personal` (`e4d5dd99`). Added isolated BenchmarkDotNet selection runs with mutable output, cancellation and result charts; native/JIT disassembly and platform gating; F12 source/decompiled navigation with persistent identity-keyed cache; and `Util` decompile/IL/JIT helpers. Added focused backend/runtime/frontend tests. API client regenerated from Swagger; output-pane event call updated for the generated control-event signature.
+  - `d6b9b06e` Implement benchmarking and code inspection
+  - `d235189d` Persist decompiled source cache
+  - Focused validation passed: App tests 66/66, `UtilCodeInspectionTests` 9/9, focused Jest 5 suites/12 tests. Swagger generation and `git diff --check` passed.
+  - Broad validation remains limited by unrelated failures: full .NET tests hit the OmniSharp.NET `KeyValuePair.Deconstruct` compile error and a Runtime test requiring unavailable .NET 7 reference assemblies; App tests passed 66/66 and Runtime tests passed 912/913. Full Jest had 46/47 suites pass, with the existing chart-view fallback assertion failing. `tsc --noEmit` reports three existing errors in `scripts-list.ts`, `file-viewer.ts`, and `settings/window.ts`.
   - The central master plan was not edited, as required by the scoped-work instruction.
