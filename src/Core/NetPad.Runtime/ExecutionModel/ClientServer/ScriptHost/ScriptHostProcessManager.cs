@@ -36,8 +36,11 @@ public class ScriptHostProcessManager(
     ILoggerFactory loggerFactory) : IScriptHostProcessManager
 {
     private readonly SemaphoreSlim _scriptHostProcessStartLock = new(1, 1);
+    private readonly object _resourceSampleLock = new();
     private Process? _scriptHostProcess;
     private StdioIpcGateway? _ipcGateway;
+    private TimeSpan? _previousCpuTime;
+    private long _previousSampleTimestamp;
 
     private readonly ILogger _logger = loggerFactory.CreateLogger(
         $"{nameof(ScriptHostProcessManager)} | [{script.Id.ToString()[..8]}] {script.Name}");
@@ -51,6 +54,45 @@ public class ScriptHostProcessManager(
         });
 
     public bool IsScriptHostRunning() => _scriptHostProcess?.IsProcessRunning() == true;
+
+    public ScriptHostResourceSample? GetResourceSample()
+    {
+        var process = _scriptHostProcess;
+        if (process == null)
+        {
+            return null;
+        }
+
+        lock (_resourceSampleLock)
+        {
+            if (!ReferenceEquals(process, _scriptHostProcess)) return null;
+
+            try
+            {
+                if (process.HasExited) return null;
+
+                var cpuTime = process.TotalProcessorTime;
+                var timestamp = Stopwatch.GetTimestamp();
+                var workingSet = process.WorkingSet64;
+                double cpuPercent = 0;
+                if (_previousCpuTime is { } previousCpu && _previousSampleTimestamp != 0)
+                {
+                    var elapsedSeconds = (timestamp - _previousSampleTimestamp) / (double)Stopwatch.Frequency;
+                    if (elapsedSeconds > 0)
+                    {
+                        cpuPercent = Math.Max(0, (cpuTime - previousCpu).TotalSeconds / elapsedSeconds * 100);
+                    }
+                }
+
+                _previousCpuTime = cpuTime;
+                _previousSampleTimestamp = timestamp;
+                return new ScriptHostResourceSample(cpuPercent, workingSet);
+            }
+            catch (ObjectDisposedException) { return null; }
+            catch (InvalidOperationException) { return null; }
+            catch (System.ComponentModel.Win32Exception) { return null; }
+        }
+    }
 
     public void RunScript(
         Guid runId,
@@ -250,7 +292,13 @@ public class ScriptHostProcessManager(
         var ipcGateway = Interlocked.Exchange(ref _ipcGateway, null);
         ipcGateway?.Dispose();
 
-        var process = Interlocked.Exchange(ref _scriptHostProcess, null);
+        Process? process;
+        lock (_resourceSampleLock)
+        {
+            process = Interlocked.Exchange(ref _scriptHostProcess, null);
+            _previousCpuTime = null;
+            _previousSampleTimestamp = 0;
+        }
         if (process != null)
         {
             try

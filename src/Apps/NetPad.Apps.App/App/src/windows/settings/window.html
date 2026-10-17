@@ -15,7 +15,29 @@
                 </li>
             </ul>
 
-            <div class="flex-grow-height-restricted d-flex flex-column overflow-y-auto" switch.bind="selectedTab.route">
+            <div class="settings-search mb-2" if.bind="selectedTab.route !== 'about'">
+                <input class="form-control" type="search" placeholder="Search settings..."
+                       value.bind="searchQuery & input" input.trigger="search(searchQuery)" aria-label="Search settings">
+                <div class="settings-search-results" role="listbox" if.bind="searchQuery.trim()">
+                    <button class="settings-search-result" type="button" role="option"
+                            repeat.for="result of searchResults" click.trigger="selectSearchResult(result)">
+                        <span>${result.label}</span>
+                        <small>${result.tabText} / ${result.category}</small>
+                    </button>
+                    <div class="text-muted p-2" if.bind="searchResults.length === 0">No settings found.</div>
+                </div>
+            </div>
+
+            <div class="d-none" if.bind="searchQuery.trim()" ref="searchableSettingsRoot">
+                <general-settings data-settings-route="general" settings.bind="editableSettings" search-only.bind="true"></general-settings>
+                <editor-options-settings data-settings-route="editor" settings.bind="editableSettings" search-only.bind="true"></editor-options-settings>
+                <results-options-settings data-settings-route="results" settings.bind="editableSettings"></results-options-settings>
+                <style-options-settings data-settings-route="style" settings.bind="editableSettings" search-only.bind="true"></style-options-settings>
+                <keyboard-shortcut-settings data-settings-route="keyboard-shortcuts" settings.bind="editableSettings"></keyboard-shortcut-settings>
+                <omnisharp-settings data-settings-route="omnisharp" settings.bind="editableSettings"></omnisharp-settings>
+            </div>
+
+            <div ref="settingsRoot" class="flex-grow-height-restricted d-flex flex-column overflow-y-auto" switch.bind="selectedTab.route">
                 <general-settings case="general"
                                   class="tab-content"
                                   settings.bind="editableSettings"></general-settings>

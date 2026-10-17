@@ -16,6 +16,7 @@ import {DialogUtil} from "@application/dialogs/dialog-util";
 import {Util} from "@common";
 import {ILogger} from "aurelia";
 import {ScriptFolderViewModel} from "./script-folder-view-model";
+import {findMostSpecificScriptRoot, isScriptPathWithin, normalizeScriptRoot} from "./script-path-utils";
 import {ScriptViewModel} from "./script-view-model";
 
 export class ScriptsList extends ViewModelBase {
@@ -142,7 +143,8 @@ export class ScriptsList extends ViewModelBase {
                 text: "Delete",
                 show: (target) => {
                     const folder = this.getFolderFromElement(target);
-                    return folder != null && folder.path !== "/";
+                    return folder != null && folder.path !== "/" && !folder.isLibraryRoot &&
+                        (!this.hasAdditionalRoots() || !this.isInAdditionalRoot(folder.path));
                 },
                 onSelected: async (target) => {
                     const folder = this.getFolderFromElement(target);
@@ -188,26 +190,46 @@ export class ScriptsList extends ViewModelBase {
 
         const root = this.rootScriptFolder.clone();
 
-        const scriptsDirPath: string = Util.trimEnd(
-            this.settings.scriptsDirectoryPath.replaceAll("\\", "/"), "/");
+        const scriptsDirPath = normalizeScriptRoot(this.settings.scriptsDirectoryPath);
+        const additionalRoots = [...new Set((this.settings.scriptLibraryRoots ?? [])
+            .map(root => normalizeScriptRoot(root)))]
+            .filter(root => root && root !== scriptsDirPath);
+        const roots = [scriptsDirPath, ...additionalRoots];
+        const multiRoot = additionalRoots.length > 0;
+
+        if (multiRoot) {
+            for (const rootPath of roots) {
+                const rootFolder = new ScriptFolderViewModel(rootPath, rootPath, this.rootScriptFolder);
+                rootFolder.isLibraryRoot = true;
+                root.folders.push(rootFolder);
+            }
+        }
 
         for (const script of scripts) {
             if (!script.path) {
                 continue;
             }
 
-            let path = script.path.replaceAll("\\", "/");
+            const scriptPath = script.path.replaceAll("\\", "/");
+            const matchingRoot = findMostSpecificScriptRoot(scriptPath, roots);
+            if (multiRoot && !matchingRoot) continue;
 
-            if (path.startsWith(scriptsDirPath)) {
-                path = "/" + Util.trim(path.substring(scriptsDirPath.length), "/");
-            }
+            const basePath = multiRoot ? matchingRoot : scriptsDirPath;
+            const path = multiRoot
+                ? "/" + Util.trim(scriptPath.substring(basePath.length), "/")
+                : isScriptPathWithin(scriptPath, scriptsDirPath)
+                    ? "/" + Util.trim(scriptPath.substring(scriptsDirPath.length), "/")
+                    : scriptPath;
 
             const folderParts = path
                 .split("/")
                 .filter(x => !!x)
                 .slice(0, -1);
 
-            const folder = this.getFolder(root, folderParts);
+            const rootFolder = multiRoot
+                ? root.folders.find(folder => folder.path === matchingRoot)!
+                : root;
+            const folder = this.getFolder(rootFolder, folderParts, multiRoot && matchingRoot !== scriptsDirPath);
             folder.scripts.push(script);
         }
 
@@ -219,19 +241,36 @@ export class ScriptsList extends ViewModelBase {
         this.hydrateScriptMarkers();
     }
 
-    private getFolder(parent: ScriptFolderViewModel, folderPathParts: string[]): ScriptFolderViewModel {
+    private getFolder(parent: ScriptFolderViewModel, folderPathParts: string[], absolute = false): ScriptFolderViewModel {
         let result = parent;
 
-        for (const folderName of folderPathParts) {
+        for (let i = 0; i < folderPathParts.length; i++) {
+            const folderName = folderPathParts[i];
             let folder = result.folders.find(f => f.name === folderName);
             if (!folder) {
-                folder = new ScriptFolderViewModel(folderName, folderPathParts.join("/"), parent);
+                folder = new ScriptFolderViewModel(folderName,
+                    absolute ? `${result.path}/${folderName}` : folderPathParts.slice(0, i + 1).join("/"), result);
                 result.folders.push(folder);
             }
             result = folder;
         }
 
         return result;
+    }
+
+    private hasAdditionalRoots(): boolean {
+        const primaryRoot = normalizeScriptRoot(this.settings.scriptsDirectoryPath);
+        return (this.settings.scriptLibraryRoots ?? [])
+            .some(root => normalizeScriptRoot(root) !== primaryRoot);
+    }
+
+    private isInAdditionalRoot(path: string): boolean {
+        return (this.settings.scriptLibraryRoots ?? []).some(root => {
+            const normalized = normalizeScriptRoot(root);
+            const primaryRoot = normalizeScriptRoot(this.settings.scriptsDirectoryPath);
+            return normalized !== primaryRoot &&
+                (path === normalized || isScriptPathWithin(path, normalized));
+        });
     }
 
     @watch<ScriptsList>(vm => vm.session.environments.length)

@@ -1,10 +1,21 @@
 import {KeyCode} from "@common";
-import {CreateScriptDto, ISession, IScriptService, ISettingsService, IWindowService, Settings} from "@application";
+import {CreateScriptDto, RunOptions, Settings} from "@application/api";
 import {Shortcut} from "./shortcut";
+import type {ITextEditor} from "../editor/text-editor";
 import {ITextEditorService} from "../editor/itext-editor-service";
 import {INativeDialogService} from "@application/dialogs/inative-dialog-service";
 import {WindowParams} from "@application/windows/window-params";
 import {ShellType} from "@application/windows/shell-type";
+import {ISession} from "@application/sessions/isession";
+import {IScriptService} from "@application/scripts/iscript-service";
+import {ISettingsService} from "@application/configuration/isettings-service";
+import {IWindowService} from "@application/windows/iwindow-service";
+import {IWorkAreaService} from "../../../windows/main/work-area/work-area-service";
+import {INativeTextFileService} from "@application/dialogs/inative-text-file-service";
+import {FeatureSearchService} from "@application/feature-search/feature-search";
+import {OpenViewableQuickInput} from "@application/editor/open-viewable-quick-input";
+import {getBookmarkManager} from "@application/editor/bookmark-manager";
+import {FileSearchQuickInputService} from "@application/file-search/file-search-quick-input";
 
 export enum ShortcutIds {
     openCommandPalette = "shortcut.commandpalette.open",
@@ -27,7 +38,21 @@ export enum ShortcutIds {
     zoomOut = "shortcut.window.zoomOut",
     zoomReset = "shortcut.window.zoomReset",
     vimModeToggle = "shortcut.editor.vim.toggle",
+    featureSearchOpen = "shortcut.featuresearch.open",
+    openDocumentSwitcher = "shortcut.documents.switcher",
+    openTextFile = "shortcut.documents.openTextFile",
+    revertDocument = "shortcut.documents.revert",
+    toggleBookmark = "shortcut.editor.bookmark.toggle",
+    nextBookmark = "shortcut.editor.bookmark.next",
+    previousBookmark = "shortcut.editor.bookmark.previous",
+    clearBookmarks = "shortcut.editor.bookmark.clear",
+    searchFiles = "shortcut.files.search",
 }
+
+const bookmarkNumberKeys: KeyCode[] = [
+    KeyCode.Digit0, KeyCode.Digit1, KeyCode.Digit2, KeyCode.Digit3, KeyCode.Digit4,
+    KeyCode.Digit5, KeyCode.Digit6, KeyCode.Digit7, KeyCode.Digit8, KeyCode.Digit9,
+];
 
 export const BuiltinShortcuts = [
     new Shortcut(ShortcutIds.openCommandPalette, "Command Palette")
@@ -55,6 +80,36 @@ export const BuiltinShortcuts = [
             editor.focus();
             editor.trigger("", "netpad.action.goToScript", null);
         })
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.featureSearchOpen, "Search Features")
+        .withCtrlKey()
+        .withShiftKey()
+        .withKey(KeyCode.KeyP)
+        .hasAction(async ctx => {
+            const tabs = (await import("../../../windows/settings/window")).SettingsTabs;
+            await ctx.container.get(FeatureSearchService).open(tabs);
+        })
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.openDocumentSwitcher, "Switch Open Documents")
+        .withCtrlKey()
+        .withShiftKey()
+        .withKey(KeyCode.Tab)
+        .hasAction(ctx => ctx.container.get(OpenViewableQuickInput).show())
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.searchFiles, "Search Files")
+        .withCtrlKey()
+        .withShiftKey()
+        .withKey(KeyCode.KeyF)
+        .hasAction(ctx => ctx.container.get(FileSearchQuickInputService).open())
         .captureDefaultKeyCombo()
         .configurable()
         .enabled(),
@@ -101,13 +156,43 @@ export const BuiltinShortcuts = [
             .captureDefaultKeyCombo()
             .configurable()
             .enabled(),
+
+        new Shortcut(ShortcutIds.openTextFile, "Open Text File")
+            .withCtrlKey()
+            .withShiftKey()
+            .withKey(KeyCode.KeyO)
+            .hasAction(async ctx => {
+                const files = await ctx.container.get(INativeTextFileService).openTextFiles({
+                    title: "Open Text File",
+                    filters: [
+                        {name: "Text Files", extensions: ["txt", "text", "cs", "json", "xml", "md", "markdown", "html", "htm", "css", "js", "ts", "yaml", "yml", "ini", "sql"]},
+                        {name: "All Files", extensions: ["*"]},
+                    ],
+                    multiple: true,
+                });
+
+                if (!files) return;
+                const workArea = ctx.container.get(IWorkAreaService);
+                for (const file of files) {
+                    try {
+                        await workArea.openFile(file);
+                    } catch (error) {
+                        console.error("Failed to open text file:", file.path, error);
+                    }
+                }
+            })
+            .captureDefaultKeyCombo()
+            .configurable()
+            .enabled(),
     ]),
 
     new Shortcut(ShortcutIds.closeDocument, "Close")
         .withCtrlKey()
         .withKey(KeyCode.KeyW)
         .hasAction((ctx) => {
-            if (ctx.session.active) ctx.session.close(ctx.session.active.script.id, false);
+            const workArea = ctx.container.get(IWorkAreaService);
+            const host = workArea.viewerHosts.active;
+            if (host?.activeViewable) void host.activeViewable.close(host);
         })
         .captureDefaultKeyCombo()
         .configurable()
@@ -116,8 +201,9 @@ export const BuiltinShortcuts = [
     new Shortcut(ShortcutIds.saveDocument, "Save")
         .withCtrlKey()
         .withKey(KeyCode.KeyS)
-        .hasAction((ctx) => {
-            if (ctx.session.active) ctx.container.get(IScriptService).save(ctx.session.active.script.id);
+        .hasAction(async (ctx) => {
+            const viewable = ctx.container.get(IWorkAreaService).activeViewable;
+            if (viewable?.canSave()) await viewable.save();
         })
         .captureDefaultKeyCombo()
         .enabled(),
@@ -127,12 +213,25 @@ export const BuiltinShortcuts = [
         .withShiftKey()
         .withKey(KeyCode.KeyS)
         .hasAction(async (ctx) => {
-            const scriptService = ctx.container.get(IScriptService);
-            for (const environment of ctx.session.environments.filter(e => e.script.isDirty)) {
-                await scriptService.save(environment.script.id);
+            const workArea = ctx.container.get(IWorkAreaService);
+            const viewables = new Set(workArea.viewerHosts.items.flatMap(host => [...host.viewables]));
+            for (const viewable of viewables) {
+                if (viewable.isDirty && viewable.canSave()) await viewable.save();
             }
         })
         .captureDefaultKeyCombo()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.revertDocument, "Revert File")
+        .withCtrlKey()
+        .withAltKey()
+        .withKey(KeyCode.KeyR)
+        .hasAction(async ctx => {
+            const viewable = ctx.container.get(IWorkAreaService).activeViewable;
+            if (viewable?.canRevert()) await viewable.revert();
+        })
+        .captureDefaultKeyCombo()
+        .configurable()
         .enabled(),
 
     new Shortcut(ShortcutIds.runDocument, "Run")
@@ -163,7 +262,7 @@ export const BuiltinShortcuts = [
                 }
             }
 
-            await scriptService.run(environment.script.id, new (await import("@application")).RunOptions());
+            await scriptService.run(environment.script.id, new RunOptions());
         })
         .captureDefaultKeyCombo()
         .configurable()
@@ -270,4 +369,93 @@ export const BuiltinShortcuts = [
         .captureDefaultKeyCombo()
         .configurable()
         .enabled(),
+
+    new Shortcut(ShortcutIds.toggleBookmark, "Toggle Bookmark")
+        .withCtrlKey()
+        .withKey(KeyCode.F2)
+        .hasAction(ctx => {
+            const editor = ctx.container.get(ITextEditorService).active;
+            const document = editor?.active;
+            const line = editor?.monaco.getPosition()?.lineNumber;
+            if (!document || line === undefined) return;
+            getBookmarkManager(document.id).toggle(line);
+            editor.refreshBookmarkDecorations(document);
+        })
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.nextBookmark, "Next Bookmark")
+        .withKey(KeyCode.F2)
+        .hasAction(ctx => navigateBookmark(ctx.container.get(ITextEditorService).active, 1))
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.previousBookmark, "Previous Bookmark")
+        .withShiftKey()
+        .withKey(KeyCode.F2)
+        .hasAction(ctx => navigateBookmark(ctx.container.get(ITextEditorService).active, -1))
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.clearBookmarks, "Clear Bookmarks")
+        .withCtrlKey()
+        .withShiftKey()
+        .withKey(KeyCode.F2)
+        .hasAction(ctx => {
+            const editor = ctx.container.get(ITextEditorService).active;
+            const document = editor?.active;
+            if (!document || !editor) return;
+            getBookmarkManager(document.id).clear();
+            editor.refreshBookmarkDecorations(document);
+        })
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    ...Array.from({length: 10}, (_, number) => [
+        new Shortcut(`shortcut.editor.bookmark.set.${number}`, `Set Bookmark ${number}`)
+            .withCtrlKey()
+            .withAltKey()
+            .withKey(bookmarkNumberKeys[number])
+            .hasAction(ctx => {
+                const editor = ctx.container.get(ITextEditorService).active;
+                const document = editor?.active;
+                const line = editor?.monaco.getPosition()?.lineNumber;
+                if (!document || line === undefined) return;
+                getBookmarkManager(document.id).toggleNumber(number, line);
+                editor.refreshBookmarkDecorations(document);
+            })
+            .captureDefaultKeyCombo()
+            .configurable()
+            .enabled(),
+        new Shortcut(`shortcut.editor.bookmark.jump.${number}`, `Go to Bookmark ${number}`)
+            .withAltKey()
+            .withKey(bookmarkNumberKeys[number])
+            .hasAction(ctx => {
+                const editor = ctx.container.get(ITextEditorService).active;
+                const document = editor?.active;
+                const line = document ? getBookmarkManager(document.id).getNumber(number) : undefined;
+                if (editor && line !== undefined) revealBookmark(editor, line);
+            })
+            .captureDefaultKeyCombo()
+            .configurable()
+            .enabled(),
+    ]).flat(),
 ];
+
+function navigateBookmark(editor: ITextEditor | undefined, direction: 1 | -1): void {
+    const document = editor?.active;
+    const currentLine = editor?.monaco.getPosition()?.lineNumber ?? 0;
+    if (!editor || !document) return;
+    const line = getBookmarkManager(document.id).next(currentLine, direction);
+    if (line !== undefined) revealBookmark(editor, line);
+}
+
+function revealBookmark(editor: ITextEditor, line: number): void {
+    editor.monaco.revealLineInCenter(line);
+    editor.monaco.setPosition({lineNumber: line, column: 1});
+    editor.focus();
+}

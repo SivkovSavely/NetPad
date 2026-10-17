@@ -1,4 +1,23 @@
 .monaco-editor {
+    .glyph-margin .netpad-bookmark-glyph {
+        width: 100%;
+        height: 100%;
+        color: var(--accent-color);
+        text-align: center;
+        font-size: 10px;
+        font-weight: bold;
+    }
+
+    .glyph-margin .netpad-bookmark-glyph::after {
+        content: "●";
+    }
+
+    @for $number from 0 through 9 {
+        .glyph-margin .netpad-bookmark-number-#{$number}::after {
+            content: "#{$number}";
+        }
+    }
+
     .code-text-error {
         text-decoration: wavy underline red;
     }

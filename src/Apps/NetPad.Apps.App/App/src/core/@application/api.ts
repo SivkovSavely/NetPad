@@ -7174,6 +7174,7 @@ export class Settings implements ISettings {
     dotNetSdkDirectoryPath?: string | undefined;
     defaultScriptTargetFrameworkVersion?: DotNetFrameworkVersion | undefined;
     scriptsDirectoryPath!: string;
+    scriptLibraryRoots?: string[] | undefined;
     autoSaveScriptsDirectoryPath!: string;
     packageCacheDirectoryPath!: string;
     appearance!: AppearanceOptions;
@@ -7207,6 +7208,7 @@ export class Settings implements ISettings {
             this.dotNetSdkDirectoryPath = _data["dotNetSdkDirectoryPath"];
             this.defaultScriptTargetFrameworkVersion = _data["defaultScriptTargetFrameworkVersion"];
             this.scriptsDirectoryPath = _data["scriptsDirectoryPath"];
+            this.scriptLibraryRoots = _data["scriptLibraryRoots"];
             this.autoSaveScriptsDirectoryPath = _data["autoSaveScriptsDirectoryPath"];
             this.packageCacheDirectoryPath = _data["packageCacheDirectoryPath"];
             this.appearance = _data["appearance"] ? AppearanceOptions.fromJS(_data["appearance"]) : new AppearanceOptions();
@@ -7232,6 +7234,7 @@ export class Settings implements ISettings {
         data["dotNetSdkDirectoryPath"] = this.dotNetSdkDirectoryPath;
         data["defaultScriptTargetFrameworkVersion"] = this.defaultScriptTargetFrameworkVersion;
         data["scriptsDirectoryPath"] = this.scriptsDirectoryPath;
+        data["scriptLibraryRoots"] = this.scriptLibraryRoots;
         data["autoSaveScriptsDirectoryPath"] = this.autoSaveScriptsDirectoryPath;
         data["packageCacheDirectoryPath"] = this.packageCacheDirectoryPath;
         data["appearance"] = this.appearance ? this.appearance.toJSON() : <any>undefined;
@@ -7259,6 +7262,7 @@ export interface ISettings {
     dotNetSdkDirectoryPath?: string | undefined;
     defaultScriptTargetFrameworkVersion?: DotNetFrameworkVersion | undefined;
     scriptsDirectoryPath: string;
+    scriptLibraryRoots?: string[] | undefined;
     autoSaveScriptsDirectoryPath: string;
     packageCacheDirectoryPath: string;
     appearance: AppearanceOptions;

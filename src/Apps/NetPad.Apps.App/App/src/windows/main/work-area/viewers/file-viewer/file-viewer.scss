@@ -1,0 +1,29 @@
+.file-viewer-toolbar {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.file-viewer-content {
+    min-height: 0;
+}
+
+.file-editor,
+.file-preview {
+    min-height: 0;
+    overflow: auto;
+}
+
+.file-preview {
+    border-left: 1px solid var(--border-color);
+}
+
+.file-markdown-preview {
+    padding: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.file-html-preview {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: white;
+}

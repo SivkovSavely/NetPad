@@ -77,6 +77,22 @@ Plan 02 markdown renderer (previews). Plan 06 consumes: generic docs, bookmarks 
 
 No debugger/AI; don't force ripgrep dependency; don't duplicate settings definitions; avoid hard-coded key listeners (use shortcut system); don't break existing single-root flows.
 
+## Implementation status and integration notes
+
+- Feature search derives commands from the live main-menu tree and settings tab names. It does not yet index each individual setting control; the Settings window has its own full control search.
+- Settings search derives labels, section headings, titles and placeholders from rendered controls across all tabs. Search-only instances avoid initializing the hidden Monaco settings editors.
+- Open-document switching covers every viewer host and all `ViewableObject` types. Its MRU ordering is in-memory for the current application lifetime.
+- Generic-file recent entries appear in Open Recent and are removed when reopening fails. They are currently memory-only; script recents retain their existing server persistence.
+- `ScriptLibraryRoots` is an optional list of additional roots. `ScriptsDirectoryPath` is always included; roots are normalized/deduplicated, overlapping scripts are grouped under their most-specific root, and removing a root never deletes files. The explorer groups roots when additional roots exist. New-script Save continues to use the native save-location dialog with the primary root as its default; there is not a separate chooser listing configured roots.
+- Full-text search is backed by token-protected `GET /search`, caps results at 500, searches `.netpad` code plus `.cs`/`.text`, skips NUL-containing files and honors request cancellation. Results are grouped by path and open at the matched line. `.cs`/`.text` open/reload/save uses opaque server handles restricted to configured roots. The client can cancel a scan by starting a replacement search; it does not stream incremental results.
+- Native arbitrary-file I/O does not use an HTTP endpoint that accepts arbitrary paths. Electron and Tauri open/save through native dialogs and use opaque, process-lifetime handles bound to the invoking window. Search-root files use the separately token-protected, root-restricted backend handle API.
+- Generic text-file documents have independent dirty tracking, save/save-as, close confirmation, revert, Monaco language selection, recent entries and viewer-host integration. Session restoration is not implemented here; plan 06 owns workspace/session persistence. Native file handles are not persisted.
+- Markdown preview shares the escaped-HTML-by-default renderer extracted from plan 02's output renderer. HTML preview uses an unscripted, unsame-origin sandboxed iframe and debounced `srcdoc` updates.
+- Revert is implemented for generic file-backed documents. Reverting saved `.netpad` scripts and refreshing their config model remains unimplemented.
+- Resource values are per script-host process, normalized as CPU percent of one logical core plus working-set bytes. A retained KeepRunning host remains measurable; metrics are not active-run-only.
+- Bookmarks are keyed by script ID or generic file path identity, use Monaco tracked decorations, and expose configurable toggle/navigation/clear and numbered set/jump shortcuts. Persistence/restoration remains with plan 06. Save As keeps the open document ID stable for the current tab lifetime.
+- Plan 04 composition/execution for `.cs` documents remains deferred; generic text files are not executable. Existing localStorage tab-order behavior is unchanged for plan 06 to migrate.
+
 ## Focused regression tests
 
 - Feature-search registry derivation (actions+settings metadata union; alias/fuzzy scoring).
@@ -90,11 +106,17 @@ No debugger/AI; don't force ripgrep dependency; don't duplicate settings definit
 
 ## Completion checklist
 
-- [ ] Sections 1–12 implemented with criteria
-- [ ] Shortcut registrations done through BuiltinShortcuts
-- [ ] Tests added/passing
-- [ ] Master checklist updated + commits logged below
+- [ ] All section acceptance criteria complete; remaining gaps are listed above.
+- [x] New feature, switcher, file-search, multi-root path, settings-search, file lifecycle and bookmark shortcut registrations use existing shortcut/service patterns.
+- [x] Focused frontend regression tests added; full frontend Jest suite passes.
+- [ ] Master plan checklist updated (intentionally left untouched per the branch/worktree constraint).
+- [ ] Commits logged below (no commit requested or created).
 
 ## Progress log
 
-(commits appended here as they land)
+2026-10-17 — Plan 05 branch implementation:
+
+- Added feature search over menu actions and settings locations, settings control search, cross-host open-document switching, generic text-file recents, multi-root settings/explorer support, root-scoped full-text search and UI, and a generic text-file viewer with secure native file access, save/revert, Markdown/HTML previews and line navigation.
+- Added numbered and ordinary Monaco bookmarks and per-script-host CPU/working-set monitoring.
+- Added backend and frontend regression tests. Validation: `scripts/agent-jest.sh` passed (40 suites, 469 tests); `scripts/agent-test.sh src/Tests/NetPad.Runtime.Tests/NetPad.Runtime.Tests.csproj --filter FullyQualifiedName~SettingsTests` passed (16); the full .NET wrapper reported unrelated OmniSharp `netstandard2.0` `KeyValuePair.Deconstruct` compile errors and one runtime test requiring unavailable .NET 7 reference assemblies. App tests passed in that full run (47). `cargo check --manifest-path src/Apps/NetPad.Apps.Shells.Tauri/TauriApp/src-tauri/Cargo.toml` passed. `ElectronHostHook` type-checking could not complete because its `socket.io` dependency is absent from the available `node_modules`.
+- No master plan or other numbered plan was edited. No commits were created.

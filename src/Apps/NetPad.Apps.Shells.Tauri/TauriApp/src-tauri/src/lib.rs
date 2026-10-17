@@ -2,6 +2,7 @@ mod commands;
 mod dotnet_server_manager;
 mod errors;
 mod startup;
+mod text_files;
 mod windows;
 
 use std::sync::Mutex;
@@ -13,6 +14,7 @@ use crate::commands::{create_window_command, get_os_type, toggle_devtools};
 use crate::dotnet_server_manager::{DotNetServerManager, DotNetServerManagerState};
 use crate::errors::Result;
 use crate::windows::{create_main_window, create_window, WindowCreationOptions};
+use crate::text_files::{open_text_files, read_text_file, save_text_file, save_text_file_as, TextFileState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<()> {
@@ -37,6 +39,7 @@ pub fn run() -> Result<()> {
                 .build(),
         )
         .manage(server_manager_state)
+        .manage(TextFileState::default())
         .setup(move |app| {
             if cfg!(not(debug_assertions)) {
                 startup::start_backend_and_navigate(app);
@@ -64,6 +67,10 @@ pub fn run() -> Result<()> {
             create_window_command,
             get_os_type,
             toggle_devtools,
+            open_text_files,
+            read_text_file,
+            save_text_file,
+            save_text_file_as,
         ])
         .run(tauri::generate_context!())?;
 

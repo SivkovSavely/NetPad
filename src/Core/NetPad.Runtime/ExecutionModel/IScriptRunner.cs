@@ -63,4 +63,6 @@ public interface IScriptRunner : IDisposable
     /// a separate host process; otherwise throws <see cref="NotSupportedException"/>.
     /// </summary>
     void SendToScriptHost(object message);
+
+    NetPad.ExecutionModel.ClientServer.ScriptHost.ScriptHostResourceSample? GetScriptHostResourceSample() => null;
 }

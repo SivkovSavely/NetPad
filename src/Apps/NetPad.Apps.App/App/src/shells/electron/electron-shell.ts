@@ -10,6 +10,8 @@ import {ElectronNativeDialogService} from "./services/electron-native-dialog-ser
 import {NativeMainMenuEventHandler} from "./services/native-main-menu-event-handler";
 import {ElectronEventSync} from "./services/electron-event-sync";
 import {ElectronDragDropBackgroundService} from "./services/electron-drag-drop-background-service";
+import {INativeTextFileService} from "@application/dialogs/inative-text-file-service";
+import {ElectronNativeTextFileService} from "./services/electron-native-text-file-service";
 
 /**
  * Configurations for when the app is running in Electron.
@@ -21,6 +23,7 @@ export class ElectronShell implements IShell {
             Registration.transient(IWindowService, ElectronWindowService),
             Registration.singleton(IIpcGateway, SignalRIpcGateway),
             Registration.singleton(INativeDialogService, ElectronNativeDialogService),
+            Registration.singleton(INativeTextFileService, ElectronNativeTextFileService),
         );
 
         const settings = appBuilder.container.get(Settings);

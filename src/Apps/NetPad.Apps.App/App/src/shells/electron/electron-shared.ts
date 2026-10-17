@@ -15,6 +15,10 @@ export const electronConstants = {
         toggleAlwaysOnTop: "toggle-always-on-top",
         toggleDeveloperTools: "toggle-developer-tools",
         openFileSelectorDialog: "open-file-selector-dialog",
+        openTextFiles: "open-text-files",
+        readTextFile: "read-text-file",
+        saveTextFile: "save-text-file",
+        saveTextFileAs: "save-text-file-as",
 
         // Events that are forwarded from app eventbus to IPC Main process (see electron-event-sync.ts)
         appActivated: "AppActivatedEvent",

@@ -1,0 +1,29 @@
+<template>
+    <import from="core/@application/editor/text-editor"></import>
+
+    <div class="file-viewer-toolbar d-flex align-items-center gap-2 px-2 py-1">
+        <span class="flex-grow-1 text-truncate" title.bind="viewable.path">${viewable.name}</span>
+        <button class="btn btn-sm btn-secondary" click.trigger="viewable.save()" disabled.bind="!viewable.isDirty">Save</button>
+        <button if.bind="viewable.canSaveAs()" class="btn btn-sm btn-secondary" click.trigger="viewable.saveAs()">Save As...</button>
+        <button class="btn btn-sm btn-secondary" click.trigger="viewable.revert()">Revert File</button>
+        <button if.bind="previewKind"
+                class="btn btn-sm btn-secondary"
+                click.trigger="togglePreview()">${previewEnabled ? 'Edit' : 'Preview'}</button>
+    </div>
+
+    <div class="file-viewer-content d-flex flex-grow-height-restricted">
+        <div class="file-editor flex-grow-1 min-w-0">
+            <text-editor component.ref="editor"></text-editor>
+        </div>
+        <div if.bind="previewEnabled" class="file-preview flex-grow-1 min-w-0">
+            <div if.bind="previewKind === 'markdown'"
+                 class="file-markdown-preview"
+                 innerhtml.bind="previewHtml"></div>
+            <iframe if.bind="previewKind === 'html'"
+                    class="file-html-preview"
+                    sandbox=""
+                    title="HTML preview"
+                    srcdoc.bind="previewHtml"></iframe>
+        </div>
+    </div>
+</template>

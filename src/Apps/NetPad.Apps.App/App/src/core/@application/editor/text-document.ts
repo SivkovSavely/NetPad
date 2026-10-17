@@ -7,6 +7,7 @@ export type TextChangeSetter = TextDocument | "server";
 
 export class TextDocument extends WithDisposables {
     public selection: monaco.Selection | null | undefined;
+    public pendingLine?: number;
 
     private _language: TextLanguage;
     private _text: string;

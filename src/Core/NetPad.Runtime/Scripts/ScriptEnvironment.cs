@@ -5,6 +5,7 @@ using NetPad.Events;
 using NetPad.ExecutionModel;
 using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.ExecutionModel.ClientServer.Events;
+using NetPad.ExecutionModel.ClientServer.ScriptHost;
 using NetPad.ExecutionModel.ScriptServices;
 using NetPad.IO;
 using NetPad.Presentation;
@@ -143,6 +144,8 @@ public class ScriptEnvironment : IDisposable, IAsyncDisposable
     public MemCacheItemInfo[] MemCacheItems { get; private set; } = [];
 
     public bool IsScriptHostRunning { get; private set; }
+
+    public ScriptHostResourceSample? GetScriptHostResourceSample() => _runner.GetScriptHostResourceSample();
 
     /// <summary>
     /// Runs the script and returns a task that completes when the run completes.

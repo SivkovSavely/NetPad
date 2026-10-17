@@ -59,6 +59,19 @@ public class SettingsTests2
     }
 
     [Fact]
+    public void Script_Library_Roots_Always_Include_Primary_And_Dedupe_Additional_Roots()
+    {
+        var primary = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "primary"));
+        var additional = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "additional"));
+        var settings = new Settings(primary, "/cache");
+        Assert.Equal([primary], settings.GetScriptLibraryRoots());
+        settings.SetScriptLibraryRoots([additional, primary, additional]);
+        Assert.Equal([primary, additional], settings.GetScriptLibraryRoots());
+        settings.SetScriptLibraryRoots([]);
+        Assert.Equal([primary], settings.GetScriptLibraryRoots());
+    }
+
+    [Fact]
     public void Set_Package_Cache_Directory_Path_Null_Throws()
     {
         var settings = new Settings();

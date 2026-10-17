@@ -20,6 +20,7 @@ import {IMainMenuService} from "./imain-menu-service";
 import {WindowParams} from "@application/windows/window-params";
 import {ShellType} from "@application/windows/shell-type";
 import {AppDependenciesCheckDialog} from "@application/app/app-dependencies-check-dialog/app-dependencies-check-dialog";
+import {IWorkAreaService} from "../../../windows/main/work-area/work-area-service";
 
 export class MainMenuService implements IMainMenuService {
     private readonly _items: IMenuItem[] = [];
@@ -33,6 +34,7 @@ export class MainMenuService implements IMainMenuService {
         @ITextEditorService private readonly textEditorService: ITextEditorService,
         @IWindowService private readonly windowService: IWindowService,
         @IPaneManager private readonly paneManager: IPaneManager,
+        @IWorkAreaService private readonly workAreaService: IWorkAreaService,
         @ISession private readonly session: ISession,
         @IEventBus eventBus: IEventBus,
         private readonly dialogUtil: DialogUtil,
@@ -55,6 +57,11 @@ export class MainMenuService implements IMainMenuService {
                             shortcut: this.shortcutManager.getShortcut(ShortcutIds.openFile),
                         },
                         {
+                            id: "file.openTextFile",
+                            text: "Open Text File...",
+                            shortcut: this.shortcutManager.getShortcut(ShortcutIds.openTextFile),
+                        },
+                        {
                             id: "file.openRecent",
                             text: "Open Recent",
                             menuItems: []
@@ -64,6 +71,16 @@ export class MainMenuService implements IMainMenuService {
                         id: "file.goToScript",
                         text: "Go to Script",
                         shortcut: this.shortcutManager.getShortcut(ShortcutIds.quickOpenDocument),
+                    },
+                    {
+                        id: "file.featureSearch",
+                        text: "Search Features",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.featureSearchOpen),
+                    },
+                    {
+                        id: "file.searchFiles",
+                        text: "Search Files",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.searchFiles),
                     },
                     {
                         isDivider: true
@@ -79,10 +96,19 @@ export class MainMenuService implements IMainMenuService {
                         text: "Save As...",
                         icon: "save-icon",
                         click: async () => {
-                            const activeId = this.session.active?.script.id;
-                            if (activeId) await this.scriptService.saveAs(activeId);
+                            const active = this.workAreaService.activeViewable;
+                            if (active?.canSaveAs()) await active.saveAs();
+                            else {
+                                const activeId = this.session.active?.script.id;
+                                if (activeId) await this.scriptService.saveAs(activeId);
+                            }
                         }
                     }] as IMenuItem[]),
+                    {
+                        id: "file.revert",
+                        text: "Revert File",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.revertDocument),
+                    },
                     {
                         id: "file.saveAll",
                         text: "Save All",
@@ -163,6 +189,29 @@ export class MainMenuService implements IMainMenuService {
                         click: async () => this.textEditorService.active?.monaco
                             .trigger(null, "editor.action.startFindReplaceAction", null),
                         helpText: "Ctrl + H"
+                    },
+                    {
+                        isDivider: true
+                    },
+                    {
+                        id: "edit.bookmark.toggle",
+                        text: "Toggle Bookmark",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.toggleBookmark),
+                    },
+                    {
+                        id: "edit.bookmark.next",
+                        text: "Next Bookmark",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.nextBookmark),
+                    },
+                    {
+                        id: "edit.bookmark.previous",
+                        text: "Previous Bookmark",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.previousBookmark),
+                    },
+                    {
+                        id: "edit.bookmark.clear",
+                        text: "Clear Bookmarks",
+                        shortcut: this.shortcutManager.getShortcut(ShortcutIds.clearBookmarks),
                     },
                     {
                         isDivider: true
@@ -369,6 +418,7 @@ export class MainMenuService implements IMainMenuService {
 
         this.initialized = this.recentScriptsStore.initialize();
         this.recentScriptsStore.onChanged(() => this.applyRecentMenu());
+        this.workAreaService.onRecentFilesChanged(() => this.applyRecentMenu());
         this.applyRecentMenu();
     }
 
@@ -397,7 +447,23 @@ export class MainMenuService implements IMainMenuService {
             },
         }));
 
-        if (newItems.length > 0) {
+        const textFiles = this.workAreaService.recentFiles;
+        if (textFiles.length > 0 && newItems.length > 0) newItems.push({isDivider: true});
+        newItems.push(...textFiles.map((file, ix) => ({
+            id: `file.openRecent.text.${ix}`,
+            text: file.path,
+            hoverText: file.path,
+            click: async () => {
+                try {
+                    await this.workAreaService.openRecentFile(file.handle);
+                } catch (error) {
+                    this.workAreaService.removeRecentFile(file.handle);
+                    await this.dialogUtil.alert({title: "Could Not Open File", message: String(error)});
+                }
+            },
+        })));
+
+        if (paths.length > 0 || textFiles.length > 0) {
             newItems.push({isDivider: true});
             newItems.push({
                 id: "file.openRecent.clear",
@@ -405,6 +471,7 @@ export class MainMenuService implements IMainMenuService {
                 click: async () => {
                     try {
                         await this.recentScriptsStore.clear();
+                        this.workAreaService.clearRecentFiles();
                     } catch (err) {
                         console.error("Failed to clear recent scripts:", err);
                     }
@@ -413,7 +480,7 @@ export class MainMenuService implements IMainMenuService {
         }
 
         submenu.menuItems = newItems;
-        submenu.disabled = paths.length === 0;
+        submenu.disabled = paths.length + textFiles.length === 0;
 
         this.fireChanged();
     }

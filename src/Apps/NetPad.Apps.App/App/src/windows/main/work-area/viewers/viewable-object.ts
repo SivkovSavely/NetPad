@@ -42,6 +42,22 @@ export abstract class ViewableObject extends WithDisposables {
         return Promise.resolve(false);
     }
 
+    public canSaveAs(): boolean {
+        return false;
+    }
+
+    public saveAs(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    public canRevert(): boolean {
+        return false;
+    }
+
+    public revert(): Promise<boolean> {
+        return Promise.resolve(false);
+    }
+
     public canRename(): boolean {
         return false;
     }

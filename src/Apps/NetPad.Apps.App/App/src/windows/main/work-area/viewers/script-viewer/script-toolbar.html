@@ -51,6 +51,10 @@
             <option value="SQL">SQL</option>
         </select>
     </div>
+    <div class="group host-resource-metrics" if.bind="environment.isScriptHostRunning && hostCpuPercent != null">
+        <span title="Script-host process CPU rate, normalized to one logical core.">Host CPU: ${hostCpuPercent.toFixed(1)}%</span>
+        <span title="Script-host process working set (resident memory).">Working set: ${formatWorkingSet(hostWorkingSetBytes)}</span>
+    </div>
     <div class="group"
          title="Compiler optimizations (Optimize -/+)">
         <span class="group-label">Optimize:</span>

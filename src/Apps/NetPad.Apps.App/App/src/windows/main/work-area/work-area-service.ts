@@ -11,6 +11,11 @@ import {ViewerHost} from "./viewers/viewer-host";
 import {ViewableObject} from "./viewers/viewable-object";
 import {ViewableScriptDocument} from "./viewers/script-viewer/viewable-script-document";
 import {IWorkAreaAppearance} from "./work-area-appearance";
+import {NativeTextFile, NativeTextFileReference} from "@application/dialogs/inative-text-file-service";
+import {INativeTextFileService} from "@application/dialogs/inative-text-file-service";
+import {ViewableFileDocument} from "./viewers/file-viewer/viewable-file-document";
+import {LibraryTextFileService} from "@application/file-search/library-text-file-service";
+import {IFileDocumentDialogService} from "./viewers/file-viewer/file-document-dialog-service";
 
 export const IWorkAreaService = DI.createInterface<IWorkAreaService>();
 
@@ -38,11 +43,29 @@ export interface IWorkAreaService {
      * viewable types are added, extract a separate IViewableFactory.
      */
     createScriptViewable(environment: ScriptEnvironment): ViewableScriptDocument;
+
+    createFileViewable(file: NativeTextFile): ViewableFileDocument;
+
+    openFile(file: NativeTextFile, lineNumber?: number): Promise<ViewableFileDocument>;
+
+    readonly recentFiles: ReadonlyArray<NativeTextFileReference>;
+
+    onRecentFilesChanged(callback: () => void): {dispose(): void};
+
+    recordRecentFile(file: NativeTextFileReference): void;
+
+    openRecentFile(handle: string): Promise<ViewableFileDocument>;
+
+    removeRecentFile(handle: string): void;
+
+    clearRecentFiles(): void;
 }
 
 export class WorkAreaService extends WithDisposables implements IWorkAreaService {
     public readonly viewerHosts = new ViewerHostCollection();
     private _initialized = false;
+    private _recentFiles: NativeTextFileReference[] = [];
+    private readonly recentFilesChanged = new Set<() => void>();
 
     constructor(
         @IContainer private readonly container: IContainer,
@@ -121,5 +144,81 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
             this,
             this.eventBus,
         );
+    }
+
+    public createFileViewable(file: NativeTextFile): ViewableFileDocument {
+        const contentService = file.source === "library"
+            ? this.container.get(LibraryTextFileService)
+            : this.container.get(INativeTextFileService);
+        const nativeService = file.source === "library"
+            ? undefined
+            : this.container.get(INativeTextFileService);
+        return new ViewableFileDocument(
+            file,
+            contentService,
+            nativeService,
+            this.container.get(IFileDocumentDialogService),
+            this,
+        );
+    }
+
+    public async openFile(file: NativeTextFile, lineNumber?: number): Promise<ViewableFileDocument> {
+        this.recordRecentFile(file);
+        const id = ViewableFileDocument.idForPath(file.path);
+        const existing = this.findViewable(id) ?? this.viewerHosts.items
+            .flatMap(host => [...host.viewables].map(viewable => ({viewable, host})))
+            .find(item => item.viewable instanceof ViewableFileDocument
+                && ViewableFileDocument.idForPath(item.viewable.path ?? "") === id);
+        if (existing?.viewable instanceof ViewableFileDocument) {
+            existing.viewable.textDocument.pendingLine = lineNumber;
+            existing.host.activate(existing.viewable);
+            await this.viewerHosts.activate(existing.host);
+            return existing.viewable;
+        }
+
+        const viewable = this.createFileViewable(file);
+        viewable.textDocument.pendingLine = lineNumber;
+        const host = this.viewerHosts.active ?? this.viewerHosts.items[0];
+        await this.open(viewable, host);
+        host?.activate(viewable);
+        await this.viewerHosts.activate(host ?? null);
+        return viewable;
+    }
+
+    public get recentFiles(): ReadonlyArray<NativeTextFileReference> {
+        return this._recentFiles;
+    }
+
+    public onRecentFilesChanged(callback: () => void): {dispose(): void} {
+        this.recentFilesChanged.add(callback);
+        return {dispose: () => this.recentFilesChanged.delete(callback)};
+    }
+
+    public recordRecentFile(file: NativeTextFileReference): void {
+        this._recentFiles = [
+            file,
+            ...this._recentFiles.filter(recent => recent.path !== file.path),
+        ].slice(0, 15);
+        for (const callback of this.recentFilesChanged) callback();
+    }
+
+    public async openRecentFile(handle: string): Promise<ViewableFileDocument> {
+        const reference = this._recentFiles.find(file => file.handle === handle);
+        if (!reference) throw new Error("Recent text file is no longer available");
+        const service = reference.source === "library"
+            ? this.container.get(LibraryTextFileService)
+            : this.container.get(INativeTextFileService);
+        const text = await service.readTextFile(reference.handle);
+        return this.openFile({...reference, text});
+    }
+
+    public removeRecentFile(handle: string): void {
+        this._recentFiles = this._recentFiles.filter(file => file.handle !== handle);
+        for (const callback of this.recentFilesChanged) callback();
+    }
+
+    public clearRecentFiles(): void {
+        this._recentFiles = [];
+        for (const callback of this.recentFilesChanged) callback();
     }
 }

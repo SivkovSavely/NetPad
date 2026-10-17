@@ -5,6 +5,7 @@ import {WindowControlsManager} from "./app/window-controls/window-controls-manag
 import {LinkNavigationHandler} from "./app/link-navigation-handler";
 import {NativeDialogHandler} from "./app/native-dialog-handler";
 import {MonacoPasteFix} from "./app/monaco-paste-fix";
+import {NativeTextFileHandler} from "./app/native-text-file-handler";
 
 export class HookService extends Connector {
     constructor(socket: Socket, app: Electron.App) {
@@ -16,6 +17,7 @@ export class HookService extends Connector {
         MainMenuManager.init();
         LinkNavigationHandler.init();
         NativeDialogHandler.init();
+        NativeTextFileHandler.init();
         MonacoPasteFix.init();
     }
 }

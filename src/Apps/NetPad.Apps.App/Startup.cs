@@ -61,6 +61,7 @@ public class Startup
         services.AddTransient<ILogoService, LogoService>();
         services.AddTransient<IIpcService, SignalRIpcService>();
         services.AddTransient<ScriptService>();
+        services.AddSingleton<FileSearchService>();
         services.AddTransient<IAutoSaveScriptRepository, FileSystemAutoSaveScriptRepository>();
 
         // Script execution mechanism

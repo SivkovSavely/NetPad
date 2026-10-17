@@ -7,6 +7,7 @@ import {MonacoThemeManager} from "@application/editor/monaco/monaco-theme-manage
 
 export class EditorOptionsSettings {
     @bindable public settings: Settings;
+    @bindable public searchOnly = false;
     @observable public theme?: string;
     public vimModeKeyCombo?: string;
 
@@ -14,6 +15,7 @@ export class EditorOptionsSettings {
     private logger: ILogger = resolve(ILogger).scopeTo(nameof(EditorOptionsSettings));
 
     public async attached() {
+        if (this.searchOnly) return;
         const keyCombo = BuiltinShortcuts.find(x => x.id === ShortcutIds.vimModeToggle)?.keyCombo.clone();
         if (keyCombo) {
             // Use the default keybinding unless overridden by user in settings
@@ -69,7 +71,7 @@ export class EditorOptionsSettings {
     }
 
     public detaching() {
-        this.editor.dispose();
+        this.editor?.dispose();
     }
 
     public getThemes() {
@@ -110,6 +112,7 @@ export class EditorOptionsSettings {
 
     @watch<EditorOptionsSettings>(vm => vm.settings.editor.monacoOptions)
     private async updateEditorOptions(monacoOptions?: monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions) {
+        if (!this.editor) return;
         await MonacoEditorUtil.updateOptions(this.editor, this.settings);
     }
 }

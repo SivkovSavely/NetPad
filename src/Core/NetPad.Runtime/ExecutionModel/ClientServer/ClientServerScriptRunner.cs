@@ -460,6 +460,8 @@ public partial class ClientServerScriptRunner : IScriptRunner
         _scriptHostProcessManager.Send(message);
     }
 
+    public ScriptHostResourceSample? GetScriptHostResourceSample() => _scriptHostProcessManager.GetResourceSample();
+
     /// <summary>
     /// Corrects line numbers in stack trace messages of uncaught exceptions outputted by external running process,
     /// relative to the line number where user code starts.

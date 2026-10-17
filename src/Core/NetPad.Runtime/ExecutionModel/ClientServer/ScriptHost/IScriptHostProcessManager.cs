@@ -10,6 +10,8 @@ public interface IScriptHostProcessManager
 {
     bool IsScriptHostRunning();
 
+    ScriptHostResourceSample? GetResourceSample();
+
     void RunScript(
         Guid runId,
         DirectoryPath scriptHostDepsDir,
@@ -21,3 +23,5 @@ public interface IScriptHostProcessManager
 
     void StopScriptHost();
 }
+
+public sealed record ScriptHostResourceSample(double CpuPercentOfOneCore, long WorkingSetBytes);

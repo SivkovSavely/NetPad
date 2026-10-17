@@ -45,6 +45,14 @@ import {BuiltinActionProvider} from "@application/editor/providers/builtin-actio
 import {BuiltinCSharpCompletionProvider} from "@application/editor/providers/builtin-csharp-completion-provider";
 import {BuiltinSqlCompletionProvider} from "@application/editor/providers/builtin-sql-completion-provider";
 import {UserSecretService} from "@application/user-secrets/user-secret-service";
+import {FileViewer} from "./work-area/viewers/file-viewer/file-viewer";
+import {ViewableFileDocument} from "./work-area/viewers/file-viewer/viewable-file-document";
+import {FeatureSearchService} from "@application/feature-search/feature-search";
+import {OpenViewableQuickInput} from "@application/editor/open-viewable-quick-input";
+import {LibraryTextFileService} from "@application/file-search/library-text-file-service";
+import {FileSearchQuickInputService} from "@application/file-search/file-search-quick-input";
+import {IFileDocumentDialogService} from "./work-area/viewers/file-viewer/file-document-dialog-service";
+import {FileDocumentDialogService} from "./work-area/viewers/file-viewer/file-document-dialog-service-impl";
 
 export class MainWindowBootstrapper implements IWindowBootstrapper {
     constructor(private readonly logger: ILogger) {
@@ -63,6 +71,11 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             Registration.singleton(IBackgroundService, DialogBackgroundService),
             Registration.singleton(IWorkAreaService, WorkAreaService),
             Registration.singleton(IViewerRegistry, ViewerRegistry),
+            Registration.singleton(FeatureSearchService, FeatureSearchService),
+            Registration.singleton(OpenViewableQuickInput, OpenViewableQuickInput),
+            Registration.singleton(LibraryTextFileService, LibraryTextFileService),
+            Registration.singleton(FileSearchQuickInputService, FileSearchQuickInputService),
+            Registration.singleton(IFileDocumentDialogService, FileDocumentDialogService),
             Registration.singleton(IMainMenuService, MainMenuService),
             Registration.singleton(IStatusbarService, StatusbarService),
             Registration.singleton(INotificationService, NotificationService),
@@ -114,6 +127,11 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             id: "script",
             viewerClass: ScriptViewer,
             canHandle: v => v instanceof ViewableScriptDocument
+        });
+        registry.register({
+            id: "file",
+            viewerClass: FileViewer,
+            canHandle: v => v instanceof ViewableFileDocument
         });
     }
 

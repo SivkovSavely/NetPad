@@ -28,7 +28,7 @@ public class FileSystemScriptRepository : IScriptRepository
         _dataConnectionRepository = dataConnectionRepository;
         _dotNetInfo = dotNetInfo;
         _logger = logger;
-        Directory.CreateDirectory(GetRepositoryDirPath());
+        foreach (var root in GetRepositoryDirPaths()) Directory.CreateDirectory(root);
     }
 
     public async Task<IList<Script>> GetAllAsync()
@@ -227,10 +227,10 @@ public class FileSystemScriptRepository : IScriptRepository
 
     private IEnumerable<string> EnumerateScriptFiles()
     {
-        return Directory.EnumerateFiles(
-            GetRepositoryDirPath(),
-            $"*.{Script.STANDARD_EXTENSION_WO_DOT}",
-            SearchOption.AllDirectories);
+        var roots = GetRepositoryDirPaths();
+        // Overlapping roots yield each path once; nested paths are attributed to their most-specific root by consumers grouping on root-relative paths.
+        return roots.SelectMany(root => Directory.EnumerateFiles(root, $"*.{Script.STANDARD_EXTENSION_WO_DOT}", SearchOption.AllDirectories))
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     }
 
     private static Guid? ReadScriptId(string filePath)
@@ -247,8 +247,8 @@ public class FileSystemScriptRepository : IScriptRepository
         return script;
     }
 
-    private string GetRepositoryDirPath()
-    {
-        return _settings.ScriptsDirectoryPath;
-    }
+    private string[] GetRepositoryDirPaths() => _settings.GetScriptLibraryRoots()
+        .Select(Path.GetFullPath)
+        .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+        .ToArray();
 }

@@ -5,6 +5,7 @@ export class ScriptFolderViewModel {
     }
 
     public expanded = false;
+    public isLibraryRoot = false;
     public folders: ScriptFolderViewModel[] = [];
     public scripts: ScriptViewModel[] = [];
     public containingScriptCount: number = 0;

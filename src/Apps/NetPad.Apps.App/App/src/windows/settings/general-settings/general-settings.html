@@ -249,6 +249,18 @@ Only applicable when using the Integrated titlebar."></i>
         </div>
 
         <div class="mb-3 row">
+            <label class="col-12 col-md-2 col-form-label fw-bold" for="script-library-roots">Additional Script Library Roots</label>
+            <div class="col-10 col-md-8">
+                <textarea id="script-library-roots"
+                          class="form-control"
+                          rows="3"
+                          value.bind="scriptLibraryRootsText & input"
+                          placeholder="One directory per line"></textarea>
+                <small class="form-text text-muted">The Scripts directory remains the primary root. Nested roots are grouped under the most-specific root.</small>
+            </div>
+        </div>
+
+        <div class="mb-3 row">
             <label class="col-12 col-md-2 col-form-label fw-bold">Package Cache</label>
             <div class="col-10 col-md-8">
                 <input type="text" class="form-control" value.bind="settings.packageCacheDirectoryPath" spellcheck="false">

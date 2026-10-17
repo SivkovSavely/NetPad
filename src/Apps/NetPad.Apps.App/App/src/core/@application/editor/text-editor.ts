@@ -5,6 +5,7 @@ import {WithDisposables} from "@common";
 import {IEventBus, MonacoEditorUtil, Settings, ViewModelBase} from "@application";
 import {TextDocument} from "./text-document";
 import {ITextEditorService} from "./itext-editor-service";
+import {getBookmarkManager} from "./bookmark-manager";
 
 export const ITextEditor = DI.createInterface<ITextEditor>();
 
@@ -16,6 +17,7 @@ export interface ITextEditor extends WithDisposables {
     open(document: TextDocument): void;
     close(documentId: string): void;
     focus(): void;
+    refreshBookmarkDecorations(document: TextDocument): void;
 }
 
 export class TextEditor extends ViewModelBase implements ITextEditor {
@@ -25,6 +27,7 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
 
     private monacoEditorElement: HTMLElement;
     private viewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>();
+    private bookmarkDecorations = new Map<string, monaco.editor.IEditorDecorationsCollection>();
 
     constructor(
         private readonly settings: Settings,
@@ -39,6 +42,7 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
 
         const currentOpen = this.active;
         if (currentOpen === document) {
+            this.revealPendingLine(document);
             this.logger.warn(`Document is already open`);
             return;
         }
@@ -48,8 +52,10 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
         }
 
         this.monaco.setModel(document.textModel);
+        this.refreshBookmarkDecorations(document);
 
         this.monaco.restoreViewState(this.viewStates.get(document.id) || null);
+        this.revealPendingLine(document);
 
         this.active = document;
     }
@@ -58,6 +64,8 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
         this.ensureEditorInitialized();
 
         this.viewStates.delete(documentId);
+        this.bookmarkDecorations.get(documentId)?.clear();
+        this.bookmarkDecorations.delete(documentId);
         if (this.active && this.active.id === documentId) {
             this.monaco.setModel(null);
             this.active = null;
@@ -82,6 +90,7 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
             formatOnType: true,
             formatOnPaste: true,
             automaticLayout: true,
+            glyphMargin: true,
         });
 
         this.updateEditorSettings();
@@ -110,9 +119,20 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
             this.monaco.onDidChangeCursorPosition(ev => this.position = ev.position)
         );
 
+        this.addDisposable(this.monaco.onDidChangeModelContent(() => {
+            const document = this.active;
+            const decorations = document && this.bookmarkDecorations.get(document.id);
+            if (document && decorations) {
+                getBookmarkManager(document.id).updateTrackedLines(
+                    decorations.getRanges().map(range => range.startLineNumber),
+                );
+            }
+        }));
+
         this.addDisposable(
             this.monaco.onDidChangeModel(ev => {
                 this.position = this.monaco.getPosition();
+                if (this.active && this.monaco.getModel() === this.active.textModel && !this.bookmarkDecorations.has(this.active.id)) this.refreshBookmarkDecorations(this.active);
             })
         );
 
@@ -123,8 +143,28 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
 
         this.addDisposable(() => {
             this.viewStates.clear();
+            for (const decorations of this.bookmarkDecorations.values()) decorations.clear();
+            this.bookmarkDecorations.clear();
             this.monaco.dispose();
         });
+    }
+
+    public refreshBookmarkDecorations(document: TextDocument) {
+        const model = this.monaco.getModel();
+        if (!model || model !== document.textModel) return;
+        this.bookmarkDecorations.get(document.id)?.clear();
+        const decorations = getBookmarkManager(document.id).decorations(model);
+        this.bookmarkDecorations.set(document.id, this.monaco.createDecorationsCollection(decorations));
+    }
+
+    private revealPendingLine(document: TextDocument): void {
+        const line = document.pendingLine;
+        const model = this.monaco.getModel();
+        if (line === undefined || !model) return;
+        const targetLine = Math.max(1, Math.min(line, model.getLineCount()));
+        this.monaco.revealLineInCenter(targetLine);
+        this.monaco.setPosition({lineNumber: targetLine, column: 1});
+        document.pendingLine = undefined;
     }
 
     @watch<TextEditor>(vm => vm.settings.appearance.theme)

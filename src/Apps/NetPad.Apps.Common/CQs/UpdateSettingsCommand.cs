@@ -21,6 +21,7 @@ public class UpdateSettingsCommand(Settings settings) : Command
                 .SetDotNetSdkDirectoryPath(incoming.DotNetSdkDirectoryPath)
                 .SetDefaultScriptTargetFrameworkVersion(incoming.DefaultScriptTargetFrameworkVersion)
                 .SetScriptsDirectoryPath(incoming.ScriptsDirectoryPath)
+                .SetScriptLibraryRoots(incoming.ScriptLibraryRoots)
                 .SetPackageCacheDirectoryPath(incoming.PackageCacheDirectoryPath)
                 .SetAppearanceOptions(incoming.Appearance)
                 .SetEditorOptions(incoming.Editor)

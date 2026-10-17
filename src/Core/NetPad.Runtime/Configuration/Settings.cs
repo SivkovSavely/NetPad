@@ -35,6 +35,7 @@ public class Settings : ISettingsOptions
     [JsonInclude] public string? DotNetSdkDirectoryPath { get; private set; }
     [JsonInclude] public DotNetFrameworkVersion? DefaultScriptTargetFrameworkVersion { get; private set; }
     [JsonInclude] public string ScriptsDirectoryPath { get; private set; } = null!;
+    [JsonInclude] public List<string>? ScriptLibraryRoots { get; private set; }
     [JsonInclude] public string AutoSaveScriptsDirectoryPath { get; private set; } = null!;
     [JsonInclude] public string PackageCacheDirectoryPath { get; private set; } = null!;
     [JsonInclude] public AppearanceOptions Appearance { get; private set; } = null!;
@@ -68,6 +69,23 @@ public class Settings : ISettingsOptions
             scriptsDirectoryPath ?? throw new ArgumentNullException(nameof(scriptsDirectoryPath));
         return this;
     }
+
+    public Settings SetScriptLibraryRoots(IEnumerable<string>? roots)
+    {
+        ScriptLibraryRoots = roots?.Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(Path.GetFullPath)
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .ToList();
+        return this;
+    }
+
+    public IEnumerable<string> GetScriptLibraryRoots() =>
+        new[] { ScriptsDirectoryPath }
+            .Concat(ScriptLibraryRoots ?? [])
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(Path.GetFullPath)
+            .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .ToArray();
 
     public Settings SetPackageCacheDirectoryPath(string packageCacheDirectoryPath)
     {

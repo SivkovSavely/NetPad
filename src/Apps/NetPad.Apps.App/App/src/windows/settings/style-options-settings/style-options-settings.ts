@@ -5,6 +5,7 @@ import {watch} from "@aurelia/runtime-html";
 
 export class StyleOptionsSettings {
     @bindable public settings: Settings;
+    @bindable public searchOnly = false;
     public currentSettings: Readonly<Settings>;
     private editor: monaco.editor.IStandaloneCodeEditor;
     private logger: ILogger;
@@ -15,6 +16,7 @@ export class StyleOptionsSettings {
     }
 
     public attached() {
+        if (this.searchOnly) return;
         const id = "style-editor";
         const el = document.getElementById(id);
         if (!el) {
@@ -40,11 +42,12 @@ export class StyleOptionsSettings {
     }
 
     public detaching() {
-        this.editor.dispose();
+        this.editor?.dispose();
     }
 
     @watch<StyleOptionsSettings>(vm => vm.currentSettings.editor.monacoOptions)
     private async updateEditorOptions() {
+        if (!this.editor) return;
         await MonacoEditorUtil.updateOptions(this.editor, this.settings);
     }
 }

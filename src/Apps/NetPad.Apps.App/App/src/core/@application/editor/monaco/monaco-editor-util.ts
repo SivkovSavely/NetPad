@@ -7,7 +7,7 @@ import {IKeybindingService} from "monaco-editor/esm/vs/platform/keybinding/commo
 // @ts-ignore
 import {StandaloneServices} from "monaco-editor/esm/vs/editor/standalone/browser/standaloneServices";
 /* eslint-enable @typescript-eslint/ban-ts-comment */
-import {Settings} from "@application";
+import {Settings} from "@application/api";
 import {MonacoThemeManager} from "./monaco-theme-manager";
 
 export class MonacoEditorUtil {

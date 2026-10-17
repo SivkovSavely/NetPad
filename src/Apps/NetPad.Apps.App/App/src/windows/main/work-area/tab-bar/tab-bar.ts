@@ -85,6 +85,19 @@ export class TabBar extends ViewModelBase {
                 onSelected: async (clickTarget) => await this.getViewable(clickTarget).save()
             },
             {
+                icon: "save-icon",
+                text: "Save As...",
+                show: (clickTarget) => this.getViewable(clickTarget).canSaveAs(),
+                onSelected: async (clickTarget) => await this.getViewable(clickTarget).saveAs()
+            },
+            {
+                icon: "undo-icon",
+                text: "Revert File",
+                shortcut: this.shortcutManager.getShortcut(ShortcutIds.revertDocument),
+                show: (clickTarget) => this.getViewable(clickTarget).canRevert(),
+                onSelected: async (clickTarget) => await this.getViewable(clickTarget).revert()
+            },
+            {
                 icon: "properties-icon",
                 text: "Properties",
                 shortcut: this.shortcutManager.getShortcut(ShortcutIds.openDocumentProperties),

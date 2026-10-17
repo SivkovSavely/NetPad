@@ -7,6 +7,7 @@ import {renderChart} from "./chart-view";
 import "highlight.js/styles/monokai.min.css";
 import "katex/dist/katex.min.css";
 import {UiUtil} from "@common/utils/ui-util";
+import {renderMarkdown} from "@application/markdown/render-markdown";
 
 export class DumpContainer implements IDisposable {
     public readonly element: HTMLElement;
@@ -426,22 +427,9 @@ export class DumpContainer implements IDisposable {
 
     private renderMarkdown(el: Element) {
         const text = el.textContent ?? "";
-
-        import("marked")
-            .then(m => m.marked)
-            .then(marked => {
-                let source = text;
-
-                // Raw HTML is escaped by default so untrusted markdown cannot inject markup.
-                if (el.getAttribute("data-allow-raw-html") !== "true") {
-                    source = source
-                        .replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;");
-                }
-
-                el.innerHTML = marked.parse(source, {async: false}) as string;
-            })
+        const allowRawHtml = el.getAttribute("data-allow-raw-html") === "true";
+        renderMarkdown(text, allowRawHtml)
+            .then(html => el.innerHTML = html)
             .catch(err => console.error("Failed to render markdown", err));
     }
 

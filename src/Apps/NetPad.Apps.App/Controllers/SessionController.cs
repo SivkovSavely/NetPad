@@ -68,6 +68,15 @@ public class SessionController(IMediator mediator) : ControllerBase
         };
     }
 
+    [HttpGet("environments/{scriptId:guid}/resources")]
+    public async Task<IActionResult> GetEnvironmentResources(Guid scriptId)
+    {
+        var environment = await mediator.Send(new GetOpenedScriptEnvironmentQuery(scriptId))
+                          ?? throw new EnvironmentNotFoundException(scriptId);
+        var sample = environment.GetScriptHostResourceSample();
+        return sample == null ? NoContent() : Ok(sample);
+    }
+
     [HttpGet("recent")]
     public IEnumerable<string> GetRecent([FromServices] IRecentScriptsService recentScriptsService)
     {
