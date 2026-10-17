@@ -57,11 +57,16 @@ Per-section above plus: benchmark cancellation terminates children; artifact cle
 
 ## Completion checklist
 
-- [ ] Sections 1–5 implemented with criteria
-- [ ] Platform gating messages verified
-- [ ] Tests added/passing
-- [ ] Master checklist updated + commits logged below
+- [x] Sections 1–5 implemented with criteria
+- [x] Platform gating messages verified
+- [x] Focused tests added/passing
+- [~] Master checklist intentionally left unchanged per task scope; plan 07 commits logged below
 
 ## Progress log
 
-(commits appended here as they land)
+- 2026-10-17: Implemented plan 07 after rebasing on `personal` (`d47b7594`). Added isolated BenchmarkDotNet selection runs with mutable output, cancellation and result charts; native/JIT disassembly and platform gating; F12 source/decompiled navigation with persistent identity-keyed cache; and `Util` decompile/IL/JIT helpers. Added focused backend/runtime/frontend tests. API client regenerated from Swagger; output-pane event call updated for the generated control-event signature.
+  - `22cd5fac` Implement benchmarking and code inspection
+  - `5f51b021` Persist decompiled source cache
+  - Focused validation passed: App tests 62/62, `UtilCodeInspectionTests` 9/9, focused Jest 4 suites/11 tests. Swagger generation and `git diff --check` passed.
+  - Broad validation remains limited by unrelated failures: full .NET tests hit the OmniSharp.NET `KeyValuePair.Deconstruct` compile error and a Runtime test requiring unavailable .NET 7 reference assemblies; full Jest had 44/45 suites pass, with the existing chart-view fallback assertion failing. `tsc --noEmit` reports three existing errors in `scripts-list.ts`, `file-viewer.ts`, and `settings/window.ts`.
+  - The central master plan was not edited, as required by the scoped-work instruction.
