@@ -1,9 +1,10 @@
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.TypeSystem;
@@ -15,6 +16,7 @@ using NetPad.CodeAnalysis;
 using NetPad.Compilation;
 using NetPad.Compilation.Directives;
 using NetPad.Compilation.Scripts.Dependencies;
+using NetPad.Configuration;
 using NetPad.DotNet;
 using NetPad.DotNet.CodeAnalysis;
 using NetPad.DotNet.References;
@@ -40,10 +42,26 @@ public sealed record CodeDecompilationResponse(
 
 public sealed record CodeDecompilationRequest(int Line, int Column);
 
-internal sealed class AssemblyDecompilerCache<T> where T : notnull
+internal sealed class AssemblyDecompilerCache
 {
-    private readonly Dictionary<(string Identity, string Path), (long LastWriteTicks, long Length, T Value)> _entries = new();
     private readonly object _lock = new();
+    private readonly string _cacheDirectoryPath;
+
+    private sealed class CacheMetadata
+    {
+        public CacheMetadata() { }
+
+        public string AssemblyIdentity { get; set; } = string.Empty;
+        public string AssemblyPath { get; set; } = string.Empty;
+        public long LastWriteTimeUtcTicks { get; set; }
+        public long Length { get; set; }
+    }
+
+    internal AssemblyDecompilerCache(string? cacheDirectoryPath = null)
+    {
+        _cacheDirectoryPath = cacheDirectoryPath ?? AppDataProvider.AppDataDirectoryPath
+            .Combine("Cache", "DecompiledSources").Path;
+    }
 
     internal int Count
     {
@@ -51,12 +69,15 @@ internal sealed class AssemblyDecompilerCache<T> where T : notnull
         {
             lock (_lock)
             {
-                return _entries.Count;
+                return Directory.Exists(_cacheDirectoryPath)
+                    ? Directory.EnumerateDirectories(_cacheDirectoryPath)
+                        .Count(directory => File.Exists(Path.Combine(directory, "metadata.json")))
+                    : 0;
             }
         }
     }
 
-    internal T GetOrAdd(string identity, string path, Func<T> factory)
+    internal string GetOrAdd(string identity, string path, string typeName, Func<string> factory)
     {
         var fullPath = Path.GetFullPath(path);
         var file = new FileInfo(fullPath);
@@ -65,29 +86,111 @@ internal sealed class AssemblyDecompilerCache<T> where T : notnull
             throw new FileNotFoundException("The referenced assembly no longer exists.", fullPath);
         }
 
-        var key = (identity, fullPath);
-        var lastWriteTicks = file.LastWriteTimeUtc.Ticks;
+        var metadata = new CacheMetadata
+        {
+            AssemblyIdentity = identity,
+            AssemblyPath = fullPath,
+            LastWriteTimeUtcTicks = file.LastWriteTimeUtc.Ticks,
+            Length = file.Length
+        };
+        var cacheKey = Hash(identity + "\0" + fullPath);
+        var assemblyCacheDirectoryPath = Path.Combine(_cacheDirectoryPath, cacheKey);
 
         lock (_lock)
         {
-            foreach (var staleKey in _entries.Keys.Where(existing =>
-                         (existing.Path == fullPath && existing.Identity != identity) ||
-                         (existing.Identity == identity && existing.Path != fullPath) ||
-                         (existing == key && (_entries[existing].LastWriteTicks != lastWriteTicks ||
-                                              _entries[existing].Length != file.Length)))
-                     .ToArray())
+            Directory.CreateDirectory(_cacheDirectoryPath);
+            EvictStaleEntries(metadata);
+
+            if (Directory.Exists(assemblyCacheDirectoryPath))
             {
-                _entries.Remove(staleKey);
+                var existing = ReadMetadata(assemblyCacheDirectoryPath);
+                if (!MetadataMatches(existing, metadata))
+                {
+                    Directory.Delete(assemblyCacheDirectoryPath, recursive: true);
+                }
             }
 
-            if (_entries.TryGetValue(key, out var entry))
+            Directory.CreateDirectory(assemblyCacheDirectoryPath);
+            var metadataPath = Path.Combine(assemblyCacheDirectoryPath, "metadata.json");
+            if (!File.Exists(metadataPath))
             {
-                return entry.Value;
+                WriteAtomically(metadataPath, JsonSerializer.Serialize(metadata));
             }
 
-            var value = factory();
-            _entries[key] = (lastWriteTicks, file.Length, value);
-            return value;
+            var typeSourcePath = Path.Combine(assemblyCacheDirectoryPath, Hash(typeName) + ".cs");
+            if (File.Exists(typeSourcePath))
+            {
+                return File.ReadAllText(typeSourcePath);
+            }
+
+            var source = factory();
+            WriteAtomically(typeSourcePath, source);
+            return source;
+        }
+    }
+
+    private void EvictStaleEntries(CacheMetadata current)
+    {
+        foreach (var directory in Directory.EnumerateDirectories(_cacheDirectoryPath))
+        {
+            var existing = ReadMetadata(directory);
+            if (existing == null)
+            {
+                continue;
+            }
+
+            var sameIdentity = string.Equals(existing.AssemblyIdentity, current.AssemblyIdentity, StringComparison.Ordinal);
+            var samePath = string.Equals(existing.AssemblyPath, current.AssemblyPath, StringComparison.Ordinal);
+            var stale = (sameIdentity && !samePath)
+                || (samePath && !sameIdentity)
+                || (sameIdentity && samePath && !MetadataMatches(existing, current));
+
+            if (stale)
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    private static CacheMetadata? ReadMetadata(string directory)
+    {
+        try
+        {
+            var path = Path.Combine(directory, "metadata.json");
+            return File.Exists(path) ? JsonSerializer.Deserialize<CacheMetadata>(File.ReadAllText(path)) : null;
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool MetadataMatches(CacheMetadata? left, CacheMetadata right)
+    {
+        return left != null
+            && string.Equals(left.AssemblyIdentity, right.AssemblyIdentity, StringComparison.Ordinal)
+            && string.Equals(left.AssemblyPath, right.AssemblyPath, StringComparison.Ordinal)
+            && left.LastWriteTimeUtcTicks == right.LastWriteTimeUtcTicks
+            && left.Length == right.Length;
+    }
+
+    private static string Hash(string value)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static void WriteAtomically(string path, string content)
+    {
+        var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, content);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
         }
     }
 }
@@ -99,7 +202,7 @@ public sealed class CodeDecompilationService : IDisposable
     private readonly ICodeAnalysisService _codeAnalysisService;
     private readonly IDotNetInfo _dotNetInfo;
     private readonly ILogger<CodeDecompilationService> _logger;
-    private readonly AssemblyDecompilerCache<ConcurrentDictionary<string, string>> _decompilerCache = new();
+    private readonly AssemblyDecompilerCache _decompilerCache = new();
     private readonly string _imageReferenceDirectory = Path.Combine(Path.GetTempPath(), $"netpad-decompilation-{Guid.NewGuid():N}");
     private readonly object _imageReferenceLock = new();
 
@@ -214,15 +317,15 @@ public sealed class CodeDecompilationService : IDisposable
         var metadataTypeName = GetMetadataTypeName(containingType.OriginalDefinition);
         try
         {
-            var typeSources = _decompilerCache.GetOrAdd(
+            var content = _decompilerCache.GetOrAdd(
                 assemblyIdentity,
                 path,
-                () => new ConcurrentDictionary<string, string>(StringComparer.Ordinal));
-            var content = typeSources.GetOrAdd(metadataTypeName, _ =>
-            {
-                var decompiler = new CSharpDecompiler(path, new DecompilerSettings());
-                return decompiler.DecompileTypeAsString(new FullTypeName(metadataTypeName));
-            });
+                metadataTypeName,
+                () =>
+                {
+                    var decompiler = new CSharpDecompiler(path, new DecompilerSettings());
+                    return decompiler.DecompileTypeAsString(new FullTypeName(metadataTypeName));
+                });
 
             var symbolSpan = FindSymbolSpan(content, symbol, containingType);
             return new CodeDecompilationResponse(

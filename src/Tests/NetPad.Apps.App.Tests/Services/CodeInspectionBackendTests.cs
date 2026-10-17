@@ -212,9 +212,10 @@ public sealed class CodeInspectionBackendTests
     }
 
     [Fact]
-    public void Decompiler_cache_reuses_identity_path_entries_and_invalidates_changes()
+    public void Decompiler_cache_persists_sources_and_invalidates_identity_path_and_file_changes()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"netpad-decompiler-cache-{Guid.NewGuid():N}");
+        var cacheDirectory = Path.Combine(directory, "cache");
         Directory.CreateDirectory(directory);
         var firstPath = Path.Combine(directory, "first.dll");
         var secondPath = Path.Combine(directory, "second.dll");
@@ -223,27 +224,35 @@ public sealed class CodeInspectionBackendTests
 
         try
         {
-            var cache = new AssemblyDecompilerCache<object>();
+            var cache = new AssemblyDecompilerCache(cacheDirectory);
             var factoryCalls = 0;
-            var first = cache.GetOrAdd("Example, Version=1", firstPath, () => { factoryCalls++; return new object(); });
-            var same = cache.GetOrAdd("Example, Version=1", firstPath, () => { factoryCalls++; return new object(); });
-            Assert.Same(first, same);
+            var first = cache.GetOrAdd("Example, Version=1", firstPath, "Example.Type",
+                () => { factoryCalls++; return "first decompiled source"; });
+            var same = cache.GetOrAdd("Example, Version=1", firstPath, "Example.Type",
+                () => { factoryCalls++; return "unexpected source"; });
+            Assert.Equal(first, same);
             Assert.Equal(1, factoryCalls);
 
-            var changedIdentity = cache.GetOrAdd("Example, Version=2", firstPath,
-                () => { factoryCalls++; return new object(); });
-            Assert.NotSame(first, changedIdentity);
+            var reopenedCache = new AssemblyDecompilerCache(cacheDirectory);
+            var persisted = reopenedCache.GetOrAdd("Example, Version=1", firstPath, "Example.Type",
+                () => { factoryCalls++; return "unexpected source"; });
+            Assert.Equal(first, persisted);
+            Assert.Equal(1, factoryCalls);
+
+            var changedIdentity = reopenedCache.GetOrAdd("Example, Version=2", firstPath, "Example.Type",
+                () => { factoryCalls++; return "changed identity"; });
+            Assert.NotEqual(first, changedIdentity);
             Assert.Equal(1, cache.Count);
 
-            var changedPath = cache.GetOrAdd("Example, Version=2", secondPath,
-                () => { factoryCalls++; return new object(); });
-            Assert.NotSame(changedIdentity, changedPath);
+            var changedPath = reopenedCache.GetOrAdd("Example, Version=2", secondPath, "Example.Type",
+                () => { factoryCalls++; return "changed path"; });
+            Assert.NotEqual(changedIdentity, changedPath);
             Assert.Equal(1, cache.Count);
 
             File.WriteAllText(secondPath, "updated assembly content");
-            var changedFile = cache.GetOrAdd("Example, Version=2", secondPath,
-                () => { factoryCalls++; return new object(); });
-            Assert.NotSame(changedPath, changedFile);
+            var changedFile = reopenedCache.GetOrAdd("Example, Version=2", secondPath, "Example.Type",
+                () => { factoryCalls++; return "changed file"; });
+            Assert.NotEqual(changedPath, changedFile);
             Assert.Equal(4, factoryCalls);
         }
         finally
