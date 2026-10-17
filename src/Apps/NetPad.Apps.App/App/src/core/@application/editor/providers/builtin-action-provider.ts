@@ -2,6 +2,7 @@ import * as monaco from "monaco-editor";
 import {
     ApiException,
     IActionProvider,
+    INotificationService,
     ISession,
     MonacoEditorUtil,
     RecentScriptsStore,
@@ -10,16 +11,80 @@ import {
     ScriptsStore,
     ScriptSummary
 } from "@application";
+import {ProblemDetails} from "@application/api-problem-details";
+import {IBenchmarkService} from "@application/benchmark/ibenchmark-service";
 
 export class BuiltinActionProvider implements IActionProvider {
     constructor(
         @ISession private readonly session: ISession,
         private readonly scriptsStore: ScriptsStore,
-        private readonly recentScriptsStore: RecentScriptsStore) {
+        private readonly recentScriptsStore: RecentScriptsStore,
+        @IBenchmarkService private readonly benchmarkService: IBenchmarkService,
+        @INotificationService private readonly notificationService: INotificationService) {
     }
 
     public provideActions(): monaco.editor.IActionDescriptor[] {
         return [
+            {
+                id: "netpad.action.benchmarkSelection",
+                label: "Benchmark Selection",
+                run: async editor => {
+                    const scriptId = this.getScriptId(editor);
+                    if (!scriptId) return;
+
+                    const environment = this.session.environments.find(env => env.script.id === scriptId);
+                    if (environment?.script.config.kind === "SQL") {
+                        this.notificationService.notify(
+                            "Benchmark selection requires a C# script.",
+                            "Transient",
+                            "Info",
+                            scriptId);
+                        return;
+                    }
+
+                    const code = this.getSelectedCode(editor, scriptId);
+                    if (code === undefined) return;
+
+                    try {
+                        const operationId = await this.benchmarkService.start(scriptId, code);
+                        if (!operationId) throw new Error("The benchmark request did not return an operation id.");
+                        this.notificationService.notify(
+                            "Benchmark started. Progress and results are available in the Output pane.",
+                            "Notice",
+                            "Info",
+                            scriptId);
+                    } catch (error) {
+                        this.notificationService.notify(
+                            `Could not start benchmark: ${this.getErrorMessage(error)}`,
+                            "Alert",
+                            "Error",
+                            scriptId);
+                    }
+                }
+            },
+            {
+                id: "netpad.action.cancelBenchmark",
+                label: "Cancel Benchmark",
+                run: async editor => {
+                    const scriptId = this.getScriptId(editor);
+                    if (!scriptId) return;
+
+                    try {
+                        const cancelled = await this.benchmarkService.cancelLatest(scriptId);
+                        this.notificationService.notify(
+                            cancelled ? "Benchmark cancelled." : "No active benchmark for this script.",
+                            "Transient",
+                            "Info",
+                            scriptId);
+                    } catch (error) {
+                        this.notificationService.notify(
+                            `Could not cancel benchmark: ${this.getErrorMessage(error)}`,
+                            "Alert",
+                            "Error",
+                            scriptId);
+                    }
+                }
+            },
             {
                 id: "netpad.action.transformToUpperOrLowercase",
                 label: "Transform to Upper/Lower Case",
@@ -64,6 +129,43 @@ export class BuiltinActionProvider implements IActionProvider {
                 }
             }
         ];
+    }
+
+    private getScriptId(editor: monaco.editor.ICodeEditor | undefined): string | undefined {
+        const model = editor?.getModel();
+        if (!model || model.uri.scheme !== "inmemory" || model.uri.authority !== "model") return;
+
+        const scriptId = MonacoEditorUtil.getScriptId(model);
+        if (!this.session.environments.some(environment => environment.script.id === scriptId)) return;
+        return scriptId;
+    }
+
+    private getSelectedCode(editor: monaco.editor.ICodeEditor, scriptId: string): string | undefined {
+        const model = editor.getModel();
+        const selection = editor.getSelection();
+        if (!model || !selection || selection.isEmpty()) {
+            this.notificationService.notify("Select code in a script before starting a benchmark.", "Transient", "Info", scriptId);
+            return;
+        }
+
+        const code = model.getValueInRange(selection);
+        if (!code.trim()) {
+            this.notificationService.notify("Select code in a script before starting a benchmark.", "Transient", "Info", scriptId);
+            return;
+        }
+
+        return code;
+    }
+
+    private getErrorMessage(error: unknown): string {
+        if (error instanceof ApiException) {
+            try {
+                return ProblemDetails.fromJS(JSON.parse(error.response)).detail || error.message;
+            } catch {
+                return error.message;
+            }
+        }
+        return error instanceof Error ? error.message : String(error);
     }
 
     /**

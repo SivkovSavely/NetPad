@@ -1,10 +1,10 @@
 <import from="./syntax-tree-view/syntax-tree-view"></import>
 <import from="./il-view/il-view"></import>
-
-<let active-tab.bind="'SyntaxTree'"></let>
+<import from="./disassembly-view/disassembly-view"></import>
+<import from="./decompiled-code-view/decompiled-code-view"></import>
 
 <pane-toolbar>
-    <div class="tabs">
+    <div class="tabs code-pane-tabs">
         <div class="tab-button ${activeTab === 'SyntaxTree' ? 'active' : ''}"
              click.trigger="activeTab = 'SyntaxTree'"
              title="Syntax Tree Viewer">
@@ -14,6 +14,17 @@
              click.trigger="activeTab = 'IL'"
              title="Intermediate Language (IL) Viewer">
             IL
+        </div>
+        <div class="tab-button ${activeTab === 'Disassembly' ? 'active' : ''}"
+             click.trigger="activeTab = 'Disassembly'"
+             title="Native/JIT Disassembly Viewer">
+            Disassembly
+        </div>
+        <div if.bind="decompilation"
+             class="tab-button ${activeTab === 'Decompiled' ? 'active' : ''}"
+             click.trigger="activeTab = 'Decompiled'"
+             title="${decompilation.isSource ? (decompilation.sourcePath || 'Loaded Source File') : 'Decompiled Metadata Symbol'}">
+            ${decompilation.isSource ? 'Source' : 'Decompiled'}
         </div>
     </div>
 
@@ -33,4 +44,11 @@
     <il-view show.bind="activeTab === 'IL'"
              pane.bind="$this"
              is-active.bind="activeTab === 'IL'"></il-view>
+    <disassembly-view show.bind="activeTab === 'Disassembly'"
+                      pane.bind="$this"
+                      is-active.bind="activeTab === 'Disassembly'"></disassembly-view>
+    <decompiled-code-view show.bind="activeTab === 'Decompiled'"
+                          class="d-block h-100"
+                          response.bind="decompilation"
+                          is-active.bind="activeTab === 'Decompiled'"></decompiled-code-view>
 </div>

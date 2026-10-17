@@ -2,6 +2,7 @@
 import {watch} from "@aurelia/runtime-html";
 import {
     ChannelInfo,
+    ControlEventMessage,
     EnvironmentPropertyChangedEvent,
     IEventBus,
     IIpcGateway,
@@ -230,7 +231,11 @@ export class OutputPane extends Pane {
             actionId => void this.scriptService.invokeScriptAction(scriptId, actionId);
         container.onControlEvent =
             (controlId, eventType, payloadJson) =>
-                void this.scriptService.sendControlEvent(scriptId, controlId, eventType, payloadJson);
+                void this.scriptService.sendControlEvent(scriptId, new ControlEventMessage({
+                    controlId,
+                    eventType,
+                    payloadJson
+                }));
     }
 
     private handleResultHostCommand(msg: ResultHostCommandEvent) {

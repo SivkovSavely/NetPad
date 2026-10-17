@@ -47,6 +47,7 @@ export enum ShortcutIds {
     previousBookmark = "shortcut.editor.bookmark.previous",
     clearBookmarks = "shortcut.editor.bookmark.clear",
     searchFiles = "shortcut.files.search",
+    benchmarkSelection = "shortcut.benchmark.selection",
 }
 
 const bookmarkNumberKeys: KeyCode[] = [
@@ -237,6 +238,20 @@ export const BuiltinShortcuts = [
     new Shortcut(ShortcutIds.runDocument, "Run")
         .withKey(KeyCode.F5)
         .firesEvent(async () => new (await import("@application/scripts/run-script-command")).RunScriptCommand())
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled(),
+
+    new Shortcut(ShortcutIds.benchmarkSelection, "Benchmark Selection")
+        .withCtrlKey()
+        .withAltKey()
+        .withKey(KeyCode.KeyB)
+        .hasAction(ctx => {
+            const editor = ctx.container.get(ITextEditorService).active?.monaco;
+            if (!editor) return;
+            editor.focus();
+            editor.trigger("", "netpad.action.benchmarkSelection", null);
+        })
         .captureDefaultKeyCombo()
         .configurable()
         .enabled(),

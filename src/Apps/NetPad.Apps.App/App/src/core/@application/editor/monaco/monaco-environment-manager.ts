@@ -6,6 +6,7 @@ import {
     ICodeLensProvider,
     ICommandProvider,
     ICompletionItemProvider,
+    IDefinitionProvider,
     IDiagnosticsProvider,
     IDocumentHighlightProvider,
     IDocumentRangeFormattingEditProvider,
@@ -34,6 +35,7 @@ export class MonacoEnvironmentInfo {
     semanticTokensProviders: unknown[] = [];
     documentRangeSemanticTokensProvider: unknown[] = [];
     documentSymbolProviders: unknown[] = [];
+    definitionProviders: unknown[] = [];
     implementationProviders: unknown[] = [];
     hoverProviders: unknown[] = [];
     signatureHelpProviders: unknown[] = [];
@@ -83,6 +85,7 @@ export class MonacoEnvironmentManager {
         this.registerCompletionProviders();
         this.registerSemanticTokensProviders();
         this.registerDocumentSymbolProviders();
+        this.registerDefinitionProviders();
         this.registerImplementationProviders();
         this.registerHoverProviders();
         this.registerSignatureHelpProviders();
@@ -233,6 +236,13 @@ export class MonacoEnvironmentManager {
         for (const implementationProvider of this.container.getAll(IImplementationProvider)) {
             monaco.languages.registerImplementationProvider("csharp", implementationProvider);
             this.environmentInfo.implementationProviders.push(implementationProvider);
+        }
+    }
+
+    private static registerDefinitionProviders() {
+        for (const definitionProvider of this.container.getAll(IDefinitionProvider)) {
+            monaco.languages.registerDefinitionProvider("csharp", definitionProvider);
+            this.environmentInfo.definitionProviders.push(definitionProvider);
         }
     }
 

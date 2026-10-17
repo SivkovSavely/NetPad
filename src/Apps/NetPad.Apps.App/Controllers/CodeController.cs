@@ -7,6 +7,8 @@ using NetPad.Compilation;
 using NetPad.Compilation.Scripts;
 using NetPad.Exceptions;
 using NetPad.Sessions;
+using NetPad.Services;
+using StatusCodes = Microsoft.AspNetCore.Http.StatusCodes;
 using JsonSerializer = NetPad.Common.JsonSerializer;
 
 namespace NetPad.Controllers;
@@ -103,5 +105,67 @@ public class CodeController : ControllerBase
         }
 
         return il;
+    }
+
+    [HttpGet("{scriptId:guid}/disassembly")]
+    [ProducesResponseType(typeof(CodePaneContent), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CodePaneContent), StatusCodes.Status501NotImplemented)]
+    public async Task<ActionResult<CodePaneContent>> GetNativeDisassembly(
+        Guid scriptId,
+        [FromServices] ISession session,
+        [FromServices] NativeDisassemblyService disassemblyService)
+    {
+        var env = session.Get(scriptId);
+        if (env == null)
+        {
+            throw new ScriptNotFoundException(scriptId);
+        }
+
+        if (string.IsNullOrWhiteSpace(env.Script.Code))
+        {
+            return Ok(new CodePaneContent("asm", string.Empty));
+        }
+
+        var result = await disassemblyService.DisassembleAsync(env.Script, HttpContext.RequestAborted);
+        if (!result.Supported)
+        {
+            return StatusCode(StatusCodes.Status501NotImplemented,
+                new CodePaneContent("asm", string.Empty, result.Error, Supported: false));
+        }
+
+        if (result.Error != null)
+        {
+            return StatusCode(result.StatusCode,
+                new CodePaneContent("asm", string.Empty, result.Error));
+        }
+
+        return Ok(new CodePaneContent("asm", result.Content ?? string.Empty));
+    }
+
+    [HttpPost("{scriptId:guid}/decompile")]
+    [ProducesResponseType(typeof(CodeDecompilationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<ActionResult<CodeDecompilationResponse>> DecompileAtPosition(
+        Guid scriptId,
+        [FromBody] CodeDecompilationRequest request,
+        [FromServices] ISession session,
+        [FromServices] CodeDecompilationService decompilationService)
+    {
+        if (request.Line < 1 || request.Column < 1)
+        {
+            return BadRequest("Line and column must be 1-based positive values.");
+        }
+
+        var env = session.Get(scriptId);
+        if (env == null)
+        {
+            throw new ScriptNotFoundException(scriptId);
+        }
+
+        var result = await decompilationService.DecompileAtPositionAsync(
+            env.Script,
+            request,
+            HttpContext.RequestAborted);
+        return result == null ? NoContent() : Ok(result);
     }
 }

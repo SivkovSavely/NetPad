@@ -10,6 +10,7 @@ using NetPad.Configuration;
 using NetPad.Data;
 using NetPad.DotNet;
 using NetPad.Scripts;
+using NetPad.Services;
 using NetPad.Sessions;
 using NetPad.Sessions.Workspaces;
 
@@ -27,11 +28,14 @@ public class AppSetupAndCleanupBackgroundService(
     IPluginManager pluginManager,
     IAppStatusMessagePublisher appStatusMessagePublisher,
     IDotNetInfo dotNetInfo,
+    BenchmarkService benchmarkService,
     ILoggerFactory loggerFactory)
     : BackgroundService(loggerFactory)
 {
     protected override async Task StartingAsync(CancellationToken stoppingToken)
     {
+        benchmarkService.CleanUpStaleRuns();
+
         // Clean up temp directories and stale connection files left behind by previous instances
         _ = Task.Run(() =>
         {
@@ -134,6 +138,7 @@ public class AppSetupAndCleanupBackgroundService(
     protected override async Task StoppingAsync(CancellationToken cancellationToken)
     {
         _ = appStatusMessagePublisher.PublishTransientAsync("Closing...");
+        await benchmarkService.CancelAllAsync();
 
         var environments = session.GetOpened();
 

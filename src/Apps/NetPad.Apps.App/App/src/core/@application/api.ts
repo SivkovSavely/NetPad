@@ -104,7 +104,7 @@ export class AppApiClient extends ApiClientBase implements IAppApiClient {
             let result200: any = null;
             let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
                 result200 = resultData200 !== undefined ? resultData200 : <any>null;
-    
+
             return result200;
             });
         } else if (status !== 200 && status !== 204) {
@@ -417,11 +417,122 @@ export class AssembliesApiClient extends ApiClientBase implements IAssembliesApi
     }
 }
 
+export interface IBenchmarkApiClient {
+
+    start(scriptId: string, selectedCode: string, signal?: AbortSignal | undefined): Promise<string>;
+
+    cancel(scriptId: string, operationId: string, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
+}
+
+export class BenchmarkApiClient extends ApiClientBase implements IBenchmarkApiClient {
+    private http: IHttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, @IHttpClient http?: IHttpClient) {
+        super();
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    start(scriptId: string, selectedCode: string, signal?: AbortSignal): Promise<string> {
+        let url_ = this.baseUrl + "/code/{scriptId}/benchmark";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(selectedCode);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processStart(_response);
+        });
+    }
+
+    protected processStart(response: Response): Promise<string> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                result200 = resultData200 !== undefined ? resultData200 : <any>null;
+
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<string>(null as any);
+    }
+
+    cancel(scriptId: string, operationId: string, signal?: AbortSignal): Promise<FileResponse | null> {
+        let url_ = this.baseUrl + "/code/{scriptId}/benchmark/{operationId}";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        if (operationId === undefined || operationId === null)
+            throw new Error("The parameter 'operationId' must be defined.");
+        url_ = url_.replace("{operationId}", encodeURIComponent("" + operationId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "DELETE",
+            signal,
+            headers: {
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processCancel(_response);
+        });
+    }
+
+    protected processCancel(response: Response): Promise<FileResponse | null> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse | null>(null as any);
+    }
+}
+
 export interface ICodeApiClient {
 
     getSyntaxTree(scriptId: string, signal?: AbortSignal | undefined): Promise<SyntaxNodeOrTokenSlim>;
 
     getIntermediateLanguage(scriptId: string, includeAssemblyHeader: boolean | undefined, signal?: AbortSignal | undefined): Promise<string>;
+
+    getNativeDisassembly(scriptId: string, signal?: AbortSignal | undefined): Promise<CodePaneContent>;
+
+    decompileAtPosition(scriptId: string, request: CodeDecompilationRequest, signal?: AbortSignal | undefined): Promise<CodeDecompilationResponse>;
 }
 
 export class CodeApiClient extends ApiClientBase implements ICodeApiClient {
@@ -514,6 +625,95 @@ export class CodeApiClient extends ApiClientBase implements ICodeApiClient {
             });
         }
         return Promise.resolve<string>(null as any);
+    }
+
+    getNativeDisassembly(scriptId: string, signal?: AbortSignal): Promise<CodePaneContent> {
+        let url_ = this.baseUrl + "/code/{scriptId}/disassembly";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetNativeDisassembly(_response);
+        });
+    }
+
+    protected processGetNativeDisassembly(response: Response): Promise<CodePaneContent> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = CodePaneContent.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 501) {
+            return response.text().then((_responseText) => {
+            let result501: any = null;
+            let resultData501 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result501 = CodePaneContent.fromJS(resultData501);
+            return throwException("A server side error occurred.", status, _responseText, _headers, result501);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<CodePaneContent>(null as any);
+    }
+
+    decompileAtPosition(scriptId: string, request: CodeDecompilationRequest, signal?: AbortSignal): Promise<CodeDecompilationResponse> {
+        let url_ = this.baseUrl + "/code/{scriptId}/decompile";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processDecompileAtPosition(_response);
+        });
+    }
+
+    protected processDecompileAtPosition(response: Response): Promise<CodeDecompilationResponse> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = CodeDecompilationResponse.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 204) {
+            return Promise.resolve(null as any);
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<CodeDecompilationResponse>(null as any);
     }
 }
 
@@ -1856,10 +2056,6 @@ export interface IScriptsApiClient {
 
     getScriptsInfo(name: string | null | undefined, signal?: AbortSignal | undefined): Promise<ScriptInfo[]>;
 
-    invokeScriptAction(id: string, actionId: string, signal?: AbortSignal | undefined): Promise<void>;
-
-    sendControlEvent(id: string, controlId: string, eventType: string, payloadJson: string, signal?: AbortSignal | undefined): Promise<void>;
-
     getScript(id: string, signal?: AbortSignal | undefined): Promise<Script>;
 
     delete(id: string, signal?: AbortSignal | undefined): Promise<void>;
@@ -1911,6 +2107,10 @@ export interface IScriptsApiClient {
     clearMemCacheItems(id: string, signal?: AbortSignal | undefined): Promise<void>;
 
     expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
+
+    invokeScriptAction(id: string, actionId: string, signal?: AbortSignal | undefined): Promise<void>;
+
+    sendControlEvent(id: string, message: ControlEventMessage, signal?: AbortSignal | undefined): Promise<void>;
 }
 
 export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient {
@@ -2904,94 +3104,6 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
         return Promise.resolve<FileResponse | null>(null as any);
     }
 
-    invokeScriptAction(id: string, actionId: string, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/scripts/{id}/actions/{actionId}";
-        if (id === undefined || id === null)
-            throw new Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        url_ = url_.replace("{actionId}", encodeURIComponent("" + actionId));
-
-        let options_: RequestInit = {
-            method: "PATCH",
-            signal,
-            headers: {}
-        };
-
-        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
-            return this.processInvokeScriptAction(_response);
-        });
-    }
-
-    sendControlEvent(id: string, controlId: string, eventType: string, payloadJson: string, signal?: AbortSignal): Promise<void> {
-        let url_ = this.baseUrl + "/scripts/{id}/controls/events";
-        if (id === undefined || id === null)
-            throw new Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-
-        let options_: RequestInit = {
-            method: "PATCH",
-            signal,
-            body: JSON.stringify({controlId, eventType, payloadJson}),
-            headers: {"Content-Type": "application/json"}
-        };
-
-        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
-            return this.processInvokeScriptAction(_response);
-        });
-    }
-
-    protected processInvokeScriptAction(response: Response): Promise<void> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            return;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<void>(null as any);
-    }
-
-    expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal): Promise<void> {        let url_ = this.baseUrl + "/scripts/{id}/on-demand/expand?";
-        if (id === undefined || id === null)
-            throw new Error("The parameter 'id' must be defined.");
-        url_ = url_.replace("{id}", encodeURIComponent("" + id));
-        if (outputId === null)
-            throw new Error("The parameter 'outputId' cannot be null.");
-        else if (outputId !== undefined)
-            url_ += "outputId=" + encodeURIComponent("" + outputId) + "&";
-        url_ = url_.replace(/[?&]$/, "");
-
-        let options_: RequestInit = {
-            method: "PATCH",
-            signal,
-            headers: {
-            }
-        };
-
-        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
-            return this.processExpandOnDemand(_response);
-        });
-    }
-
-    protected processExpandOnDemand(response: Response): Promise<void> {
-        const status = response.status;
-        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
-            return response.text().then((_responseText) => {
-            return;
-            });
-        } else if (status !== 200 && status !== 204) {
-            return response.text().then((_responseText) => {
-            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
-            });
-        }
-        return Promise.resolve<void>(null as any);
-    }
-
     dumpMemCacheItem(id: string, key: string | undefined, signal?: AbortSignal): Promise<void> {
         let url_ = this.baseUrl + "/scripts/{id}/mem-cache/dump?";
         if (id === undefined || id === null)
@@ -3101,6 +3213,319 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
         }
         return Promise.resolve<void>(null as any);
     }
+
+    expandOnDemand(id: string, outputId: string | undefined, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/on-demand/expand?";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (outputId === null)
+            throw new Error("The parameter 'outputId' cannot be null.");
+        else if (outputId !== undefined)
+            url_ += "outputId=" + encodeURIComponent("" + outputId) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processExpandOnDemand(_response);
+        });
+    }
+
+    protected processExpandOnDemand(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    invokeScriptAction(id: string, actionId: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/actions/{actionId}";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        if (actionId === undefined || actionId === null)
+            throw new Error("The parameter 'actionId' must be defined.");
+        url_ = url_.replace("{actionId}", encodeURIComponent("" + actionId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processInvokeScriptAction(_response);
+        });
+    }
+
+    protected processInvokeScriptAction(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+
+    sendControlEvent(id: string, message: ControlEventMessage, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/controls/events";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(message);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PATCH",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processSendControlEvent(_response);
+        });
+    }
+
+    protected processSendControlEvent(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
+    }
+}
+
+export interface ISearchApiClient {
+
+    search(query: string | undefined, signal?: AbortSignal | undefined): Promise<FileSearchResult[]>;
+
+    open(path: string | undefined, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
+
+    reload(handle: string, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
+
+    save(handle: string, request: SaveFileRequest, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
+}
+
+export class SearchApiClient extends ApiClientBase implements ISearchApiClient {
+    private http: IHttpClient;
+    private baseUrl: string;
+    protected jsonParseReviver: ((key: string, value: any) => any) | undefined = undefined;
+
+    constructor(baseUrl?: string, @IHttpClient http?: IHttpClient) {
+        super();
+        this.http = http ? http : window as any;
+        this.baseUrl = baseUrl ?? "";
+    }
+
+    search(query: string | undefined, signal?: AbortSignal): Promise<FileSearchResult[]> {
+        let url_ = this.baseUrl + "/search?";
+        if (query === null)
+            throw new Error("The parameter 'query' cannot be null.");
+        else if (query !== undefined)
+            url_ += "query=" + encodeURIComponent("" + query) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processSearch(_response);
+        });
+    }
+
+    protected processSearch(response: Response): Promise<FileSearchResult[]> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            if (Array.isArray(resultData200)) {
+                result200 = [] as any;
+                for (let item of resultData200)
+                    result200!.push(FileSearchResult.fromJS(item));
+            }
+            else {
+                result200 = <any>null;
+            }
+            return result200;
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileSearchResult[]>(null as any);
+    }
+
+    open(path: string | undefined, signal?: AbortSignal): Promise<FileResponse | null> {
+        let url_ = this.baseUrl + "/search/open?";
+        if (path === null)
+            throw new Error("The parameter 'path' cannot be null.");
+        else if (path !== undefined)
+            url_ += "path=" + encodeURIComponent("" + path) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processOpen(_response);
+        });
+    }
+
+    protected processOpen(response: Response): Promise<FileResponse | null> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse | null>(null as any);
+    }
+
+    reload(handle: string, signal?: AbortSignal): Promise<FileResponse | null> {
+        let url_ = this.baseUrl + "/search/open/{handle}";
+        if (handle === undefined || handle === null)
+            throw new Error("The parameter 'handle' must be defined.");
+        url_ = url_.replace("{handle}", encodeURIComponent("" + handle));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processReload(_response);
+        });
+    }
+
+    protected processReload(response: Response): Promise<FileResponse | null> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse | null>(null as any);
+    }
+
+    save(handle: string, request: SaveFileRequest, signal?: AbortSignal): Promise<FileResponse | null> {
+        let url_ = this.baseUrl + "/search/open/{handle}";
+        if (handle === undefined || handle === null)
+            throw new Error("The parameter 'handle' must be defined.");
+        url_ = url_.replace("{handle}", encodeURIComponent("" + handle));
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(request);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "PUT",
+            signal,
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processSave(_response);
+        });
+    }
+
+    protected processSave(response: Response): Promise<FileResponse | null> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse | null>(null as any);
+    }
 }
 
 export interface ISessionApiClient {
@@ -3118,6 +3543,8 @@ export interface ISessionApiClient {
     getActive(signal?: AbortSignal | undefined): Promise<string | null>;
 
     getEnvironmentStatus(scriptId: string, signal?: AbortSignal | undefined): Promise<ScriptStatusDto>;
+
+    getEnvironmentResources(scriptId: string, signal?: AbortSignal | undefined): Promise<FileResponse | null>;
 
     getRecent(signal?: AbortSignal | undefined): Promise<string[]>;
 
@@ -3404,6 +3831,48 @@ export class SessionApiClient extends ApiClientBase implements ISessionApiClient
             });
         }
         return Promise.resolve<ScriptStatusDto>(null as any);
+    }
+
+    getEnvironmentResources(scriptId: string, signal?: AbortSignal): Promise<FileResponse | null> {
+        let url_ = this.baseUrl + "/session/environments/{scriptId}/resources";
+        if (scriptId === undefined || scriptId === null)
+            throw new Error("The parameter 'scriptId' must be defined.");
+        url_ = url_.replace("{scriptId}", encodeURIComponent("" + scriptId));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            signal,
+            headers: {
+                "Accept": "application/octet-stream"
+            }
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processGetEnvironmentResources(_response);
+        });
+    }
+
+    protected processGetEnvironmentResources(response: Response): Promise<FileResponse | null> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<FileResponse | null>(null as any);
     }
 
     getRecent(signal?: AbortSignal): Promise<string[]> {
@@ -5067,6 +5536,191 @@ export interface ISyntaxTriviaSlim {
     displayValue?: string | undefined;
 }
 
+export class CodePaneContent implements ICodePaneContent {
+    language!: string;
+    content!: string;
+    error?: string | undefined;
+    supported!: boolean;
+
+    constructor(data?: ICodePaneContent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.language = _data["language"];
+            this.content = _data["content"];
+            this.error = _data["error"];
+            this.supported = _data["supported"];
+        }
+    }
+
+    static fromJS(data: any): CodePaneContent {
+        data = typeof data === 'object' ? data : {};
+        let result = new CodePaneContent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["language"] = this.language;
+        data["content"] = this.content;
+        data["error"] = this.error;
+        data["supported"] = this.supported;
+        return data;
+    }
+
+    clone(): CodePaneContent {
+        const json = this.toJSON();
+        let result = new CodePaneContent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface ICodePaneContent {
+    language: string;
+    content: string;
+    error?: string | undefined;
+    supported: boolean;
+}
+
+export class CodeDecompilationResponse implements ICodeDecompilationResponse {
+    language!: string;
+    content!: string;
+    assemblyIdentity!: string;
+    symbolIdentity!: string;
+    startLine!: number;
+    startColumn!: number;
+    endLine!: number;
+    endColumn!: number;
+    isSource!: boolean;
+    isCurrentScriptSource!: boolean;
+    sourcePath?: string | undefined;
+
+    constructor(data?: ICodeDecompilationResponse) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.language = _data["language"];
+            this.content = _data["content"];
+            this.assemblyIdentity = _data["assemblyIdentity"];
+            this.symbolIdentity = _data["symbolIdentity"];
+            this.startLine = _data["startLine"];
+            this.startColumn = _data["startColumn"];
+            this.endLine = _data["endLine"];
+            this.endColumn = _data["endColumn"];
+            this.isSource = _data["isSource"];
+            this.isCurrentScriptSource = _data["isCurrentScriptSource"];
+            this.sourcePath = _data["sourcePath"];
+        }
+    }
+
+    static fromJS(data: any): CodeDecompilationResponse {
+        data = typeof data === 'object' ? data : {};
+        let result = new CodeDecompilationResponse();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["language"] = this.language;
+        data["content"] = this.content;
+        data["assemblyIdentity"] = this.assemblyIdentity;
+        data["symbolIdentity"] = this.symbolIdentity;
+        data["startLine"] = this.startLine;
+        data["startColumn"] = this.startColumn;
+        data["endLine"] = this.endLine;
+        data["endColumn"] = this.endColumn;
+        data["isSource"] = this.isSource;
+        data["isCurrentScriptSource"] = this.isCurrentScriptSource;
+        data["sourcePath"] = this.sourcePath;
+        return data;
+    }
+
+    clone(): CodeDecompilationResponse {
+        const json = this.toJSON();
+        let result = new CodeDecompilationResponse();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface ICodeDecompilationResponse {
+    language: string;
+    content: string;
+    assemblyIdentity: string;
+    symbolIdentity: string;
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+    isSource: boolean;
+    isCurrentScriptSource: boolean;
+    sourcePath?: string | undefined;
+}
+
+export class CodeDecompilationRequest implements ICodeDecompilationRequest {
+    line!: number;
+    column!: number;
+
+    constructor(data?: ICodeDecompilationRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.line = _data["line"];
+            this.column = _data["column"];
+        }
+    }
+
+    static fromJS(data: any): CodeDecompilationRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new CodeDecompilationRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["line"] = this.line;
+        data["column"] = this.column;
+        return data;
+    }
+
+    clone(): CodeDecompilationRequest {
+        const json = this.toJSON();
+        let result = new CodeDecompilationRequest();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface ICodeDecompilationRequest {
+    line: number;
+    column: number;
+}
+
 export class GetAllConnectionsResponse implements IGetAllConnectionsResponse {
     connections!: DataConnection[];
     servers!: DatabaseServerConnection[];
@@ -5886,6 +6540,7 @@ export class ScriptOutput implements IScriptOutput {
     format!: ScriptOutputFormat;
     outputId?: string | undefined;
     isUpdate!: boolean;
+    /** The name of the result panel this output belongs to; null means the main results view. */
     panelName?: string | undefined;
 
     constructor(data?: IScriptOutput) {
@@ -5924,6 +6579,7 @@ export class ScriptOutput implements IScriptOutput {
         data["format"] = this.format;
         data["outputId"] = this.outputId;
         data["isUpdate"] = this.isUpdate;
+        data["panelName"] = this.panelName;
         return data;
     }
 
@@ -5942,235 +6598,13 @@ export interface IScriptOutput {
     format: ScriptOutputFormat;
     outputId?: string | undefined;
     isUpdate: boolean;
+    /** The name of the result panel this output belongs to; null means the main results view. */
     panelName?: string | undefined;
 }
 
 export type ScriptOutputKind = "Result" | "Sql" | "Error";
 
 export type ScriptOutputFormat = "Text" | "Html" | "Json";
-
-export type ResultHostCommand =
-    | "ClearResults"
-    | "HideEditor"
-    | "ShowEditor"
-    | "HideResults"
-    | "ShowResults"
-    | "AutoScrollResults"
-    | "OpenPanel"
-    | "RemovePanel";
-
-export interface IResultHostCommandEvent {
-    requestId: string;
-    scriptId: string;
-    command: ResultHostCommand;
-    payloadJson?: string | undefined;
-}
-
-export class ResultHostCommandEvent implements IResultHostCommandEvent {
-    scriptId!: string;
-    command!: ResultHostCommand;
-    payloadJson?: string | undefined;
-    requestId!: string;
-
-    constructor(data?: IResultHostCommandEvent) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.scriptId = _data["scriptId"];
-            this.command = _data["command"];
-            this.payloadJson = _data["payloadJson"];
-            this.requestId = _data["requestId"];
-        }
-    }
-
-    static fromJS(data: any): ResultHostCommandEvent {
-        data = typeof data === 'object' ? data : {};
-        let result = new ResultHostCommandEvent();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["scriptId"] = this.scriptId;
-        data["command"] = this.command;
-        data["payloadJson"] = this.payloadJson;
-        data["requestId"] = this.requestId;
-        return data;
-    }
-
-    clone(): ResultHostCommandEvent {
-        const json = this.toJSON();
-        let result = new ResultHostCommandEvent();
-        result.init(json);
-        return result;
-    }
-}
-
-export interface IScriptHtmlHeadEntry {
-    type: number;
-    content: string;
-}
-
-export class ScriptHtmlHeadEntry implements IScriptHtmlHeadEntry {
-    type!: number;
-    content!: string;
-
-    constructor(data?: IScriptHtmlHeadEntry) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.type = _data["type"];
-            this.content = _data["content"];
-        }
-    }
-
-    static fromJS(data: any): ScriptHtmlHeadEntry {
-        data = typeof data === 'object' ? data : {};
-        let result = new ScriptHtmlHeadEntry();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["type"] = this.type;
-        data["content"] = this.content;
-        return data;
-    }
-
-    clone(): ScriptHtmlHeadEntry {
-        const json = this.toJSON();
-        let result = new ScriptHtmlHeadEntry();
-        result.init(json);
-        return result;
-    }
-}
-
-export interface IScriptHtmlHeadChangedEvent {
-    requestId: string;
-    scriptId: string;
-    entries: ScriptHtmlHeadEntry[];
-}
-
-export class ScriptHtmlHeadChangedEvent implements IScriptHtmlHeadChangedEvent {
-    scriptId!: string;
-    entries!: ScriptHtmlHeadEntry[];
-    requestId!: string;
-
-    constructor(data?: IScriptHtmlHeadChangedEvent) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-        if (!data) {
-            this.entries = [];
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.scriptId = _data["scriptId"];
-            if (Array.isArray(_data["entries"])) {
-                this.entries = [] as any;
-                for (let item of _data["entries"])
-                    this.entries!.push(ScriptHtmlHeadEntry.fromJS(item));
-            } else {
-                this.entries = <any>_data["entries"];
-            }
-            this.requestId = _data["requestId"];
-        }
-    }
-
-    static fromJS(data: any): ScriptHtmlHeadChangedEvent {
-        data = typeof data === 'object' ? data : {};
-        let result = new ScriptHtmlHeadChangedEvent();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["scriptId"] = this.scriptId;
-        if (this.entries && this.entries.constructor === Array) {
-            data["entries"] = [];
-            for (let item of this.entries)
-                data["entries"].push(item.toJSON());
-        }
-        data["requestId"] = this.requestId;
-        return data;
-    }
-
-    clone(): ScriptHtmlHeadChangedEvent {
-        const json = this.toJSON();
-        let result = new ScriptHtmlHeadChangedEvent();
-        result.init(json);
-        return result;
-    }
-}
-
-export interface IJsEvalResponse {
-    resultJson?: string | undefined;
-    error?: string | undefined;
-}
-
-export class JsEvalResponse implements IJsEvalResponse {
-    resultJson?: string | undefined;
-    error?: string | undefined;
-
-    constructor(data?: IJsEvalResponse) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (<any>this)[property] = (<any>data)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.resultJson = _data["resultJson"];
-            this.error = _data["error"];
-        }
-    }
-
-    static fromJS(data: any): JsEvalResponse {
-        data = typeof data === 'object' ? data : {};
-        let result = new JsEvalResponse();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["resultJson"] = this.resultJson;
-        data["error"] = this.error;
-        return data;
-    }
-
-    clone(): JsEvalResponse {
-        const json = this.toJSON();
-        let result = new JsEvalResponse();
-        result.init(json);
-        return result;
-    }
-}
 
 export class HeadlessRunRequest implements IHeadlessRunRequest {
     code!: string;
@@ -6753,7 +7187,6 @@ export class ScriptConfig implements IScriptConfig {
             }
         }
         if (!data) {
-            this.checkedArithmetic = true;
             this.namespaces = [];
             this.references = [];
         }
@@ -6765,7 +7198,7 @@ export class ScriptConfig implements IScriptConfig {
             this.targetFrameworkVersion = _data["targetFrameworkVersion"];
             this.optimizationLevel = _data["optimizationLevel"];
             this.useAspNet = _data["useAspNet"];
-            this.checkedArithmetic = _data["checkedArithmetic"] ?? true;
+            this.checkedArithmetic = _data["checkedArithmetic"];
             if (Array.isArray(_data["namespaces"])) {
                 this.namespaces = [] as any;
                 for (let item of _data["namespaces"])
@@ -6820,7 +7253,7 @@ export interface IScriptConfig {
     targetFrameworkVersion: DotNetFrameworkVersion;
     optimizationLevel: OptimizationLevel;
     useAspNet: boolean;
-    checkedArithmetic?: boolean | undefined;
+    checkedArithmetic: boolean;
     namespaces: string[];
     references: Reference[];
 }
@@ -6835,6 +7268,7 @@ export class CreateScriptDto implements ICreateScriptDto {
     targetFrameworkVersion?: DotNetFrameworkVersion | undefined;
     optimizationLevel?: OptimizationLevel | undefined;
     useAspNet?: boolean | undefined;
+    checkedArithmetic?: boolean | undefined;
     namespaces?: string[] | undefined;
     references?: Reference[] | undefined;
     runImmediately!: boolean;
@@ -6857,6 +7291,7 @@ export class CreateScriptDto implements ICreateScriptDto {
             this.targetFrameworkVersion = _data["targetFrameworkVersion"];
             this.optimizationLevel = _data["optimizationLevel"];
             this.useAspNet = _data["useAspNet"];
+            this.checkedArithmetic = _data["checkedArithmetic"];
             if (Array.isArray(_data["namespaces"])) {
                 this.namespaces = [] as any;
                 for (let item of _data["namespaces"])
@@ -6887,6 +7322,7 @@ export class CreateScriptDto implements ICreateScriptDto {
         data["targetFrameworkVersion"] = this.targetFrameworkVersion;
         data["optimizationLevel"] = this.optimizationLevel;
         data["useAspNet"] = this.useAspNet;
+        data["checkedArithmetic"] = this.checkedArithmetic;
         if (Array.isArray(this.namespaces)) {
             data["namespaces"] = [];
             for (let item of this.namespaces)
@@ -6917,6 +7353,7 @@ export interface ICreateScriptDto {
     targetFrameworkVersion?: DotNetFrameworkVersion | undefined;
     optimizationLevel?: OptimizationLevel | undefined;
     useAspNet?: boolean | undefined;
+    checkedArithmetic?: boolean | undefined;
     namespaces?: string[] | undefined;
     references?: Reference[] | undefined;
     runImmediately: boolean;
@@ -6967,6 +7404,157 @@ export class RunOptions implements IRunOptions {
 export interface IRunOptions {
     /** Gets or sets a snippet of code to run instead of the full script. */
     specificCodeToRun?: string | undefined;
+}
+
+/** A JSON-primitive browser event routed to one live script control. */
+export class ControlEventMessage implements IControlEventMessage {
+    controlId!: string;
+    eventType!: string;
+    payloadJson!: string;
+    scriptRunId?: string | undefined;
+
+    constructor(data?: IControlEventMessage) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.controlId = _data["controlId"];
+            this.eventType = _data["eventType"];
+            this.payloadJson = _data["payloadJson"];
+            this.scriptRunId = _data["scriptRunId"];
+        }
+    }
+
+    static fromJS(data: any): ControlEventMessage {
+        data = typeof data === 'object' ? data : {};
+        let result = new ControlEventMessage();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["controlId"] = this.controlId;
+        data["eventType"] = this.eventType;
+        data["payloadJson"] = this.payloadJson;
+        data["scriptRunId"] = this.scriptRunId;
+        return data;
+    }
+
+    clone(): ControlEventMessage {
+        const json = this.toJSON();
+        let result = new ControlEventMessage();
+        result.init(json);
+        return result;
+    }
+}
+
+/** A JSON-primitive browser event routed to one live script control. */
+export interface IControlEventMessage {
+    controlId: string;
+    eventType: string;
+    payloadJson: string;
+    scriptRunId?: string | undefined;
+}
+
+export class FileSearchResult implements IFileSearchResult {
+    path!: string;
+    lineNumber!: number;
+    line!: string;
+
+    constructor(data?: IFileSearchResult) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.path = _data["path"];
+            this.lineNumber = _data["lineNumber"];
+            this.line = _data["line"];
+        }
+    }
+
+    static fromJS(data: any): FileSearchResult {
+        data = typeof data === 'object' ? data : {};
+        let result = new FileSearchResult();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["path"] = this.path;
+        data["lineNumber"] = this.lineNumber;
+        data["line"] = this.line;
+        return data;
+    }
+
+    clone(): FileSearchResult {
+        const json = this.toJSON();
+        let result = new FileSearchResult();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IFileSearchResult {
+    path: string;
+    lineNumber: number;
+    line: string;
+}
+
+export class SaveFileRequest implements ISaveFileRequest {
+    text!: string;
+
+    constructor(data?: ISaveFileRequest) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.text = _data["text"];
+        }
+    }
+
+    static fromJS(data: any): SaveFileRequest {
+        data = typeof data === 'object' ? data : {};
+        let result = new SaveFileRequest();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["text"] = this.text;
+        return data;
+    }
+
+    clone(): SaveFileRequest {
+        const json = this.toJSON();
+        let result = new SaveFileRequest();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface ISaveFileRequest {
+    text: string;
 }
 
 /** Provides a managed execution context for a Script used to run it, track its status, receive script output and provide input when requested. Many high level operations throughout the application run against a ScriptEnvironment instead of the Script itself. */
@@ -7208,7 +7796,11 @@ export class Settings implements ISettings {
             this.dotNetSdkDirectoryPath = _data["dotNetSdkDirectoryPath"];
             this.defaultScriptTargetFrameworkVersion = _data["defaultScriptTargetFrameworkVersion"];
             this.scriptsDirectoryPath = _data["scriptsDirectoryPath"];
-            this.scriptLibraryRoots = _data["scriptLibraryRoots"];
+            if (Array.isArray(_data["scriptLibraryRoots"])) {
+                this.scriptLibraryRoots = [] as any;
+                for (let item of _data["scriptLibraryRoots"])
+                    this.scriptLibraryRoots!.push(item);
+            }
             this.autoSaveScriptsDirectoryPath = _data["autoSaveScriptsDirectoryPath"];
             this.packageCacheDirectoryPath = _data["packageCacheDirectoryPath"];
             this.appearance = _data["appearance"] ? AppearanceOptions.fromJS(_data["appearance"]) : new AppearanceOptions();
@@ -7234,7 +7826,11 @@ export class Settings implements ISettings {
         data["dotNetSdkDirectoryPath"] = this.dotNetSdkDirectoryPath;
         data["defaultScriptTargetFrameworkVersion"] = this.defaultScriptTargetFrameworkVersion;
         data["scriptsDirectoryPath"] = this.scriptsDirectoryPath;
-        data["scriptLibraryRoots"] = this.scriptLibraryRoots;
+        if (Array.isArray(this.scriptLibraryRoots)) {
+            data["scriptLibraryRoots"] = [];
+            for (let item of this.scriptLibraryRoots)
+                data["scriptLibraryRoots"].push(item);
+        }
         data["autoSaveScriptsDirectoryPath"] = this.autoSaveScriptsDirectoryPath;
         data["packageCacheDirectoryPath"] = this.packageCacheDirectoryPath;
         data["appearance"] = this.appearance ? this.appearance.toJSON() : <any>undefined;
@@ -9939,7 +10535,7 @@ export interface IPromptUserCommand extends ICommandOfString {
 
 export class PromptUserForInputCommand extends CommandOfString implements IPromptUserForInputCommand {
     scriptId!: string;
-    isMasked?: boolean | undefined;
+    isMasked!: boolean;
 
     constructor(data?: IPromptUserForInputCommand) {
         super(data);
@@ -9963,6 +10559,7 @@ export class PromptUserForInputCommand extends CommandOfString implements IPromp
     override toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["scriptId"] = this.scriptId;
+        data["isMasked"] = this.isMasked;
         super.toJSON(data);
         return data;
     }
@@ -9977,7 +10574,7 @@ export class PromptUserForInputCommand extends CommandOfString implements IPromp
 
 export interface IPromptUserForInputCommand extends ICommandOfString {
     scriptId: string;
-    isMasked?: boolean | undefined;
+    isMasked: boolean;
 }
 
 export class AlertUserAboutMissingAppDependencies extends Command implements IAlertUserAboutMissingAppDependencies {
@@ -10799,6 +11396,182 @@ function throwException(message: string, status: number, response: string, heade
         throw result;
     else
         throw new ApiException(message, status, response, headers, null);
+}
+
+export type ResultHostCommand =
+    | "ClearResults"
+    | "HideEditor"
+    | "ShowEditor"
+    | "HideResults"
+    | "ShowResults"
+    | "AutoScrollResults"
+    | "OpenPanel"
+    | "RemovePanel";
+
+export interface IResultHostCommandEvent {
+    requestId: string;
+    scriptId: string;
+    command: ResultHostCommand;
+    payloadJson?: string | undefined;
+}
+
+export class ResultHostCommandEvent implements IResultHostCommandEvent {
+    scriptId!: string;
+    command!: ResultHostCommand;
+    payloadJson?: string | undefined;
+    requestId!: string;
+
+    constructor(data?: IResultHostCommandEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            this.command = _data["command"];
+            this.payloadJson = _data["payloadJson"];
+            this.requestId = _data["requestId"];
+        }
+    }
+
+    static fromJS(data: any): ResultHostCommandEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new ResultHostCommandEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        data["command"] = this.command;
+        data["payloadJson"] = this.payloadJson;
+        data["requestId"] = this.requestId;
+        return data;
+    }
+
+    clone(): ResultHostCommandEvent {
+        const json = this.toJSON();
+        let result = new ResultHostCommandEvent();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptHtmlHeadEntry {
+    type: number;
+    content: string;
+}
+
+export class ScriptHtmlHeadEntry implements IScriptHtmlHeadEntry {
+    type!: number;
+    content!: string;
+
+    constructor(data?: IScriptHtmlHeadEntry) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.type = _data["type"];
+            this.content = _data["content"];
+        }
+    }
+
+    static fromJS(data: any): ScriptHtmlHeadEntry {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptHtmlHeadEntry();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["type"] = this.type;
+        data["content"] = this.content;
+        return data;
+    }
+
+    clone(): ScriptHtmlHeadEntry {
+        const json = this.toJSON();
+        let result = new ScriptHtmlHeadEntry();
+        result.init(json);
+        return result;
+    }
+}
+
+export interface IScriptHtmlHeadChangedEvent {
+    requestId: string;
+    scriptId: string;
+    entries: ScriptHtmlHeadEntry[];
+}
+
+export class ScriptHtmlHeadChangedEvent implements IScriptHtmlHeadChangedEvent {
+    scriptId!: string;
+    entries!: ScriptHtmlHeadEntry[];
+    requestId!: string;
+
+    constructor(data?: IScriptHtmlHeadChangedEvent) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (<any>this)[property] = (<any>data)[property];
+            }
+        }
+        if (!data) {
+            this.entries = [];
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.scriptId = _data["scriptId"];
+            if (Array.isArray(_data["entries"])) {
+                this.entries = [] as any;
+                for (let item of _data["entries"])
+                    this.entries!.push(ScriptHtmlHeadEntry.fromJS(item));
+            } else {
+                this.entries = <any>_data["entries"];
+            }
+            this.requestId = _data["requestId"];
+        }
+    }
+
+    static fromJS(data: any): ScriptHtmlHeadChangedEvent {
+        data = typeof data === 'object' ? data : {};
+        let result = new ScriptHtmlHeadChangedEvent();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["scriptId"] = this.scriptId;
+        if (this.entries && this.entries.constructor === Array) {
+            data["entries"] = [];
+            for (let item of this.entries)
+                data["entries"].push(item.toJSON());
+        }
+        data["requestId"] = this.requestId;
+        return data;
+    }
+
+    clone(): ScriptHtmlHeadChangedEvent {
+        const json = this.toJSON();
+        let result = new ScriptHtmlHeadChangedEvent();
+        result.init(json);
+        return result;
+    }
 }
 
 export interface IRunJsInResultsCommand extends ICommand {

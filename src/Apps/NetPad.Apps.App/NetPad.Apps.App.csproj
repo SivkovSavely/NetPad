@@ -16,6 +16,7 @@
 
     <ItemGroup>
         <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="10.0.1"/>
+        <PackageReference Include="BenchmarkDotNet" Version="0.14.0"/>
         <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="6.0.1"/>
         <PackageReference Include="NSwag.AspNetCore" Version="14.4.0"/>
         <PackageReference Include="NSwag.CodeGeneration.TypeScript" Version="14.4.0"/>
@@ -23,6 +24,10 @@
         <PackageReference Include="Serilog.Enrichers.Process" Version="2.0.2"/>
         <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
         <PackageReference Include="Serilog.Sinks.File" Version="5.0.0"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="NetPad.Apps.App.Tests" />
     </ItemGroup>
 
     <ItemGroup>

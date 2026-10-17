@@ -5,6 +5,7 @@ import {
     IBackgroundService,
     ICodeService,
     ICompletionItemProvider,
+    IDefinitionProvider,
     IDataConnectionService,
     IPaneManager,
     IScriptService,
@@ -42,6 +43,7 @@ import {DataConnectionService} from "@application/data-connections/data-connecti
 import {ScriptService} from "@application/scripts/script-service";
 import {DataConnectionName} from "@application/data-connections/data-connection-name/data-connection-name";
 import {BuiltinActionProvider} from "@application/editor/providers/builtin-action-provider";
+import {CodeDecompilationDefinitionProvider} from "@application/editor/providers/code-decompilation-definition-provider";
 import {BuiltinCSharpCompletionProvider} from "@application/editor/providers/builtin-csharp-completion-provider";
 import {BuiltinSqlCompletionProvider} from "@application/editor/providers/builtin-sql-completion-provider";
 import {UserSecretService} from "@application/user-secrets/user-secret-service";
@@ -54,6 +56,8 @@ import {FileSearchQuickInputService} from "@application/file-search/file-search-
 import {IFileDocumentDialogService} from "./work-area/viewers/file-viewer/file-document-dialog-service";
 import {FileDocumentDialogService} from "./work-area/viewers/file-viewer/file-document-dialog-service-impl";
 import {IWorkspaceService, WorkspaceService} from "@application/workspaces/workspace-service";
+import {IBenchmarkService} from "@application/benchmark/ibenchmark-service";
+import {BenchmarkService} from "@application/benchmark/benchmark-service";
 
 export class MainWindowBootstrapper implements IWindowBootstrapper {
     constructor(private readonly logger: ILogger) {
@@ -67,6 +71,7 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             Registration.singleton(IScriptService, ScriptService),
             Registration.singleton(ITextEditorService, TextEditorService),
             Registration.singleton(ICodeService, CodeService),
+            Registration.singleton(IBenchmarkService, BenchmarkService),
             Registration.singleton(IUserSecretService, UserSecretService),
             Registration.singleton(IDataConnectionService, DataConnectionService),
             Registration.singleton(IBackgroundService, DialogBackgroundService),
@@ -87,6 +92,7 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             Registration.singleton(IPaneManager, PaneManager),
             Registration.singleton(IShortcutManager, ShortcutManager),
             Registration.singleton(IActionProvider, BuiltinActionProvider),
+            Registration.singleton(IDefinitionProvider, CodeDecompilationDefinitionProvider),
             Registration.singleton(ICompletionItemProvider, BuiltinCSharpCompletionProvider),
             Registration.singleton(ICompletionItemProvider, BuiltinSqlCompletionProvider),
             PaneHost,

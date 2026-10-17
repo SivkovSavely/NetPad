@@ -1,0 +1,6 @@
+<template tabindex="-1">
+    <pre show.bind="loading" class="p-3"><code>Loading native JIT disassembly...</code></pre>
+    <pre show.bind="message && !loading" class="p-3"><code class="text-salmon">${message}</code></pre>
+    <pre show.bind="current" class="p-3"><code innerHTML.bind="current"></code></pre>
+
+</template>

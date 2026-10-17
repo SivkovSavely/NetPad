@@ -63,6 +63,9 @@ public class Startup
         services.AddTransient<ILogoService, LogoService>();
         services.AddTransient<IIpcService, SignalRIpcService>();
         services.AddTransient<ScriptService>();
+        services.AddSingleton<BenchmarkService>();
+        services.AddSingleton<NativeDisassemblyService>();
+        services.AddSingleton<CodeDecompilationService>();
         services.AddSingleton<FileSearchService>();
         services.AddTransient<IAutoSaveScriptRepository, FileSystemAutoSaveScriptRepository>();
         services.AddSingleton<NetPad.Sessions.Workspaces.IWorkspaceStore>(provider =>

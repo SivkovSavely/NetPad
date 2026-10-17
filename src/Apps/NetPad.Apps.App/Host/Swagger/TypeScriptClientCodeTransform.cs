@@ -18,6 +18,10 @@ internal static class TypeScriptClientCodeTransform
             .Replace(
                 "return this.http.fetch(url_, options_)",
                 "return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_))")
+            // NSwag treats an explicitly declared 204 on a typed endpoint as an error response.
+            .Replace(
+                "else if (status === 204) {\n            return response.text().then((_responseText) => {\n            return throwException(\"A server side error occurred.\", status, _responseText, _headers);\n            });\n        }",
+                "else if (status === 204) {\n            return Promise.resolve(null as any);\n        }")
 
             // Convert to lines
             .Split("\n")
