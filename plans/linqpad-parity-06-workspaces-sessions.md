@@ -63,10 +63,31 @@ Listed per-section above; add crash-safety test simulating truncated newest file
 
 ## Completion checklist
 
-- [ ] Sections 1–6 implemented with criteria
-- [ ] Migration + fallback paths tested
-- [ ] Master checklist updated + commits logged below
+- [x] Sections 1–6 implemented with criteria
+- [x] Migration + fallback paths covered by regression tests
+- [~] Focused tests cover atomic backup recovery, document-state round trips, tab-order migration, bookmark/history persistence and workspace creation; manual conflict-choice and shelf flows are not automated yet
+- [ ] Master checklist intentionally left untouched per the branch/worktree constraint
+- [x] Plan 06 implementation commit logged below
 
 ## Progress log
 
-(commits appended here as they land)
+2026-10-17 — Plan 06 implementation:
+
+- Added a versioned `WorkspaceDocument` model and `/workspaces` API backed by an atomic JSON writer. Saves use a same-directory temporary file, rotate only a valid primary to `.bak`, and restore the backup when the primary is malformed. Missing fields and unknown fields tolerate defaults; corrupt entries are isolated.
+- Startup imports `session.openScripts` only until the first workspace snapshot is persisted. Afterwards it opens the active workspace's script ids, preserves the existing auto-save-script recovery path, and the session store now records an empty open list when the last script is closed.
+- Added frontend snapshot/restore for scripts and generic files, host/tab order, active document/host, Monaco JSON view state, bookmarks, dirty buffers, and bounded undo/redo snapshots. Legacy `tab-bar.*.viewables-order` keys migrate to the default workspace and are removed only after a successful save.
+- Added named workspace create/rename/switch/delete actions and shelf create/list/restore/delete actions to the main menu. Dirty work is kept in per-workspace automatic recovery shelves; disk-changed generic files require a keep-buffer, take-disk, or split-copy choice. Native files reopen through the existing trusted shell boundary using their persisted absolute path; library files use the root-restricted library service.
+- Reused plan 05 `ViewableFileDocument` and `BookmarkManager`; native handles remain process-local. No changes were made to the master plan or other numbered plans. Script-file Revert remains the plan 05 gap; generic-file Revert clears the edit journal after confirmation.
+- Focused tests added for workspace JSON round-trip/backup fallback, legacy tab-order migration, workspace creation, bounded edit-history replay, bookmark round-trip, and empty-session persistence.
+
+Validation:
+
+- `scripts/agent-build.sh src/Apps/NetPad.Apps.App/NetPad.Apps.App.csproj` — passed, 0 errors.
+- `scripts/agent-test.sh src/Tests/NetPad.Apps.App.Tests/NetPad.Apps.App.Tests.csproj --filter FullyQualifiedName~FileSystemWorkspaceStoreTests` — passed, 4/4.
+- `scripts/agent-test.sh src/Tests/NetPad.Runtime.Tests/NetPad.Runtime.Tests.csproj --filter FullyQualifiedName~ClosingLastScript_PersistsAnEmptyOpenList` — passed, 1/1.
+- `scripts/agent-jest.sh` focused workspace/editor/file-viewer suites — passed, 27 tests.
+- `cargo check --manifest-path src/Apps/NetPad.Apps.Shells.Tauri/TauriApp/src-tauri/Cargo.toml` — passed.
+- Broad `scripts/agent-test.sh` — App, Common, MCP and integration suites passed; Runtime had 903 passed and one unrelated .NET 7 reference-assemblies test failure. The solution build also hit unrelated OmniSharp.NET `KeyValuePair.Deconstruct` errors.
+- Broad `scripts/agent-jest.sh` — 42 suites / 483 tests passed; one unrelated plan 03 chart fallback assertion failed in `chart-view.spec.ts`.
+- App `tsc --noEmit` reports three existing errors in plan 05 files (`scripts-list.ts`, `file-viewer.ts`, `settings/window.ts`). ElectronHostHook `tsc` is blocked by missing `electron`, `socket.io`, and Node type dependencies.
+- Plan 06 implementation commit: `Implement workspaces, sessions, and shelving`.

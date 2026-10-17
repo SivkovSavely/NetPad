@@ -32,6 +32,7 @@ export class ViewableFileDocument extends ViewableTextDocument {
     private filePath: string;
     private savedText: string;
     private source?: "library";
+    private displayName?: string;
     public pendingLine?: number;
 
     constructor(
@@ -40,19 +41,21 @@ export class ViewableFileDocument extends ViewableTextDocument {
         private readonly nativeTextFileService: INativeTextFileService | undefined,
         private readonly dialogUtil: IFileDocumentDialogService,
         private readonly workAreaService: IWorkAreaService,
+        options?: {id?: string; name?: string; path?: string; savedText?: string},
     ) {
         super(
-            ViewableFileDocument.idForPath(file.path),
-            ViewableFileDocument.getName(file.path),
+            options?.id ?? ViewableFileDocument.idForPath(file.path),
+            options?.name ?? ViewableFileDocument.getName(file.path),
             ViewableFileDocument.getLanguage(file.path),
             file.text,
         );
         this.handle = file.handle;
-        this.filePath = file.path;
-        this.savedText = file.text;
+        this.filePath = options?.path ?? file.path;
+        this.savedText = options?.savedText ?? file.text;
         this.source = file.source;
-        this.path = file.path;
-        this.tooltip = file.path;
+        this.displayName = options?.name;
+        this.path = this.filePath || undefined;
+        this.tooltip = this.filePath || undefined;
     }
 
     public static idForPath(path: string): string {
@@ -71,7 +74,15 @@ export class ViewableFileDocument extends ViewableTextDocument {
     }
 
     public override get name(): string {
-        return ViewableFileDocument.getName(this.filePath);
+        return this.displayName ?? ViewableFileDocument.getName(this.filePath);
+    }
+
+    public get fileSource(): "library" | "native" {
+        return this.source ?? "native";
+    }
+
+    public get savedTextSnapshot(): string {
+        return this.savedText;
     }
 
     public override get isDirty(): boolean {
@@ -113,7 +124,7 @@ export class ViewableFileDocument extends ViewableTextDocument {
     }
 
     public override canSave(): boolean {
-        return true;
+        return !!this.handle;
     }
 
     public override async save(): Promise<boolean> {
@@ -142,6 +153,7 @@ export class ViewableFileDocument extends ViewableTextDocument {
 
             this.handle = reference.handle;
             this.filePath = reference.path;
+            this.displayName = undefined;
             this.contentFileService = this.nativeTextFileService;
             this.source = undefined;
             this.path = reference.path;
@@ -154,7 +166,7 @@ export class ViewableFileDocument extends ViewableTextDocument {
     }
 
     public override canRevert(): boolean {
-        return true;
+        return !!this.handle;
     }
 
     public override async revert(): Promise<boolean> {
@@ -174,6 +186,7 @@ export class ViewableFileDocument extends ViewableTextDocument {
             const text = await this.contentFileService.readTextFile(this.handle);
             await this.textDocument.setText("server", text);
             this.savedText = text;
+            this.textDocument.resetHistory();
             return true;
         } catch (error) {
             await this.dialogUtil.alert({title: "Could Not Revert File", message: String(error)});

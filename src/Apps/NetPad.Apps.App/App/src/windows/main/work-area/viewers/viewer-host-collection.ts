@@ -4,6 +4,7 @@ import {ViewableObject} from "./viewable-object";
 export class ViewerHostCollection {
     private _items: ViewerHost[] = [];
     private _active?: ViewerHost | null;
+    private readonly changeHandlers = new Set<() => void>();
 
     public get items(): ReadonlyArray<ViewerHost> {
         return this._items;
@@ -11,6 +12,11 @@ export class ViewerHostCollection {
 
     public get active(): ViewerHost | undefined | null {
         return this._active;
+    }
+
+    public onChanged(callback: () => void): {dispose(): void} {
+        this.changeHandlers.add(callback);
+        return {dispose: () => this.changeHandlers.delete(callback)};
     }
 
     public add(viewerHost: ViewerHost) {
@@ -22,11 +28,14 @@ export class ViewerHostCollection {
         viewerHost.order = position;
         viewerHost.name = position === 0 ? "main" : `split-${position}`;
         this._items.push(viewerHost);
+        viewerHost.onChanged(() => this.fireChanged());
+        this.fireChanged();
     }
 
     public async activate(viewerHost: ViewerHost | null) {
         this._active = viewerHost;
         await viewerHost?.activeViewable?.activate(viewerHost);
+        this.fireChanged();
     }
 
     public findViewable(viewableId: string): { viewable: ViewableObject, host: ViewerHost } | undefined {
@@ -37,5 +46,9 @@ export class ViewerHostCollection {
         }
 
         return undefined;
+    }
+
+    private fireChanged(): void {
+        for (const callback of this.changeHandlers) callback();
     }
 }

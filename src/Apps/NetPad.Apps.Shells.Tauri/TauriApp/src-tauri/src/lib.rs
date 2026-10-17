@@ -14,7 +14,7 @@ use crate::commands::{create_window_command, get_os_type, toggle_devtools};
 use crate::dotnet_server_manager::{DotNetServerManager, DotNetServerManagerState};
 use crate::errors::Result;
 use crate::windows::{create_main_window, create_window, WindowCreationOptions};
-use crate::text_files::{open_text_files, read_text_file, save_text_file, save_text_file_as, TextFileState};
+use crate::text_files::{open_text_files, read_text_file, reopen_text_file, save_text_file, save_text_file_as, TextFileState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<()> {
@@ -68,6 +68,7 @@ pub fn run() -> Result<()> {
             get_os_type,
             toggle_devtools,
             open_text_files,
+            reopen_text_file,
             read_text_file,
             save_text_file,
             save_text_file_as,

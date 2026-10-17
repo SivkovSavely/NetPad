@@ -7,6 +7,9 @@ export class ElectronNativeTextFileService implements INativeTextFileService {
     public openTextFiles(options: FileSelectorDialogOptions): Promise<NativeTextFile[] | null> {
         return ipcRenderer.invoke(electronConstants.ipcEventNames.openTextFiles, options);
     }
+    public reopenTextFile(path: string): Promise<NativeTextFile> {
+        return ipcRenderer.invoke(electronConstants.ipcEventNames.reopenTextFile, path);
+    }
     public readTextFile(handle: string): Promise<string> {
         return ipcRenderer.invoke(electronConstants.ipcEventNames.readTextFile, handle);
     }

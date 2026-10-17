@@ -1,6 +1,7 @@
 import {BrowserWindow, dialog, ipcMain, IpcMainInvokeEvent} from "electron";
 import {randomUUID} from "crypto";
 import {readFile, writeFile} from "fs/promises";
+import {isAbsolute} from "path";
 import {electronConstants} from "../electron-shared";
 
 const handles = new Map<string, {path: string; owner: number}>();
@@ -59,6 +60,12 @@ export class NativeTextFileHandler {
             if (result.canceled) return null;
             const opened = await Promise.all(result.filePaths.map(async path => ({path, text: await readText(path)})));
             return opened.map(({path, text}) => ({...issue(path, owner), text}));
+        });
+        ipcMain.handle(electronConstants.ipcEventNames.reopenTextFile, async (event, path: string) => {
+            const owner = validate(event);
+            if (typeof path !== "string" || !isAbsolute(path)) throw new Error("Invalid text-file path");
+            const text = await readText(path);
+            return {...issue(path, owner), text};
         });
         ipcMain.handle(electronConstants.ipcEventNames.readTextFile, async (event, handle: string) => readText(resolve(handle, validate(event))));
         ipcMain.handle(electronConstants.ipcEventNames.saveTextFile, async (event, handle: string, text: string) => {

@@ -81,6 +81,15 @@ pub fn open_text_files(app: AppHandle, window: WebviewWindow, state: State<TextF
 }
 
 #[tauri::command]
+pub fn reopen_text_file(window: WebviewWindow, state: State<TextFileState>, path: String) -> Result<TextFile, String> {
+    let path = PathBuf::from(path);
+    if !path.is_absolute() { return Err("Invalid text-file path".into()); }
+    let text = read(&path)?;
+    let reference = issue(&state, window.label(), path);
+    Ok(TextFile { handle: reference.handle, path: reference.path, text })
+}
+
+#[tauri::command]
 pub fn read_text_file(window: WebviewWindow, state: State<TextFileState>, handle: String) -> Result<String, String> { read(&resolve(&state, window.label(), &handle)?) }
 #[tauri::command]
 pub fn save_text_file(window: WebviewWindow, state: State<TextFileState>, handle: String, text: String) -> Result<(), String> { fs::write(resolve(&state, window.label(), &handle)?, text).map_err(|e| e.to_string()) }

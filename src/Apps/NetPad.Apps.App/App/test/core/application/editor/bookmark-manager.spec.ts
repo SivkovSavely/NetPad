@@ -44,4 +44,16 @@ describe("BookmarkManager", () => {
         expect(manager.getNumber(4)).toBeUndefined();
         expect(manager.getBookmarks()).toEqual([]);
     });
+
+    test("round trips ordinary and numbered bookmark state", () => {
+        const source = new BookmarkManager("source");
+        source.toggle(3);
+        source.setNumber(7, 12);
+
+        const restored = new BookmarkManager("restored");
+        restored.restoreState(source.getState());
+
+        expect(restored.getBookmarks()).toEqual([3, 12]);
+        expect(restored.getNumber(7)).toBe(12);
+    });
 });

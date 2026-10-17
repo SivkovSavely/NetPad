@@ -19,37 +19,23 @@ export class WorkArea extends ViewModelBase {
         super.attaching();
 
         const service = this.workbench.workAreaService;
-
-        // Create and open a viewable for each existing script environment.
-        for (const env of this.session.environments) {
-            const viewable = service.createScriptViewable(env);
-            await service.open(viewable);
-        }
-
-        // Activate the first viewer host if none is active.
-        if (!service.viewerHosts.active) {
-            const firstHost = service.viewerHosts.items[0];
-            if (firstHost) {
-                await service.viewerHosts.activate(firstHost);
-            }
-        }
-
-        // Activate the session's active environment (if any).
-        if (this.session.active) {
-            this.activeEnvironmentChanged(this.session.active);
-        }
+        await service.restoreWorkspace();
 
         // Fallback: activate the first viewable in each host that has no active viewable yet.
         for (const viewerHost of service.viewerHosts.items.filter(x => !x.activeViewable && x.viewables.size > 0)) {
             const [viewable] = viewerHost.viewables;
             viewerHost.activate(viewable);
         }
+
+        const active = service.activeViewable;
+        document.title = active ? `${active.name} - NetPad` : "NetPad";
     }
 
     @watch<WorkArea>(vm => vm.session.environments.length)
     private async environmentsChanged() {
         const environments = this.session.environments;
         const service = this.workbench.workAreaService;
+        if (service.isRestoringWorkspace) return;
 
         // Additions: create a viewable for each new environment and open it.
         for (const environment of environments) {
@@ -81,7 +67,7 @@ export class WorkArea extends ViewModelBase {
     }
 
     @watch<WorkArea>(vm => vm.session.active)
-    private activeEnvironmentChanged(newActive: ScriptEnvironment | null | undefined) {
+    private async activeEnvironmentChanged(newActive: ScriptEnvironment | null | undefined) {
         let documentTitle: string | undefined;
 
         try {
@@ -92,6 +78,7 @@ export class WorkArea extends ViewModelBase {
             const result = this.workbench.workAreaService.findViewable(newActive.script.id);
             if (result) {
                 result.host.activate(result.viewable);
+                await this.workbench.workAreaService.viewerHosts.activate(result.host);
                 documentTitle = result.viewable.name;
             }
         } finally {

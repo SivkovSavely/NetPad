@@ -18,6 +18,7 @@ export class ViewerHost {
     private _activeViewable?: ViewableObject;
     private _viewers = new Map<Constructable<Viewer>, Viewer>();
     private _activeViewer?: Viewer;
+    private readonly changeHandlers = new Set<() => void>();
 
     constructor(
         @IContainer private readonly container: IContainer,
@@ -44,6 +45,11 @@ export class ViewerHost {
         return this._activeViewer;
     }
 
+    public onChanged(callback: () => void): {dispose(): void} {
+        this.changeHandlers.add(callback);
+        return {dispose: () => this.changeHandlers.delete(callback)};
+    }
+
     public find(id: string): ViewableObject | undefined {
         return Array.from(this.viewables).find(v => v.id === id);
     }
@@ -51,12 +57,15 @@ export class ViewerHost {
     public addViewables(...viewables: ViewableObject[]) {
         if (viewables.length === 0) return;
 
+        let changed = false;
         for (const viewable of viewables) {
             if (!this._viewables.has(viewable)) {
                 this.logger.debug(`Adding viewable: ${viewable.toString()}`)
                 this._viewables.add(viewable);
+                changed = true;
             }
         }
+        if (changed) this.fireChanged();
     }
 
     public removeViewables(...viewables: ViewableObject[]) {
@@ -88,6 +97,7 @@ export class ViewerHost {
         }
 
         this.removeUnneededViewers();
+        this.fireChanged();
     }
 
     public activate(viewable: ViewableObject) {
@@ -105,6 +115,11 @@ export class ViewerHost {
         viewer.open(viewable);
         this._activeViewable = viewable;
         this._activeViewer = viewer;
+        this.fireChanged();
+    }
+
+    private fireChanged(): void {
+        for (const callback of this.changeHandlers) callback();
     }
 
     private getViewer(viewable: ViewableObject): Viewer | undefined {

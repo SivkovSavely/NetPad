@@ -1,11 +1,27 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NetPad.Data;
 using NetPad.Data.Metadata;
+using NetPad.Events;
 using NetPad.Scripts;
+using NetPad.Sessions;
 
 namespace NetPad.Runtime.Tests.Sessions;
 
 public class SessionTests(ITestOutputHelper testOutputHelper) : TestBase(testOutputHelper)
 {
+    private sealed class InMemoryTrivialDataStore : ITrivialDataStore
+    {
+        private readonly Dictionary<string, object?> _values = new();
+
+        public TValue? Get<TValue>(string key) where TValue : class =>
+            _values.TryGetValue(key, out var value) ? (TValue?)value : null;
+
+        public void Set<TValue>(string key, TValue value) => _values[key] = value;
+
+        public bool Contains(string key) => _values.ContainsKey(key);
+    }
+
     protected override void ConfigureServices(ServiceCollection services)
     {
         services.AddTransient<IDataConnectionResourcesCache, NullDataConnectionResourcesCache>();
@@ -189,6 +205,27 @@ public class SessionTests(ITestOutputHelper testOutputHelper) : TestBase(testOut
         await session.CloseAsync(script.Id);
 
         Assert.Null(session.Active);
+    }
+
+    [Fact]
+    public async Task ClosingLastScript_PersistsAnEmptyOpenList()
+    {
+        var store = new InMemoryTrivialDataStore();
+        var session = new Session(
+            ServiceProvider.GetRequiredService<IServiceScopeFactory>(),
+            store,
+            ServiceProvider.GetRequiredService<IEventBus>(),
+            ServiceProvider.GetRequiredService<ILogger<Session>>());
+        var script = ScriptTestHelper.CreateScript();
+
+        await session.OpenAsync(script, false);
+        await Task.Delay(650);
+        Assert.Equal([script.Id], store.Get<Guid[]>(Session.OpenScriptsSaveKey)!);
+
+        await session.CloseAsync(script.Id);
+        await Task.Delay(650);
+
+        Assert.Empty(store.Get<Guid[]>(Session.OpenScriptsSaveKey)!);
     }
 
     [Fact]

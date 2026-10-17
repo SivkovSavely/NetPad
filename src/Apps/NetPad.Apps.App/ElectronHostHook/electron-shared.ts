@@ -16,6 +16,7 @@ export const electronConstants = {
         toggleDeveloperTools: "toggle-developer-tools",
         openFileSelectorDialog: "open-file-selector-dialog",
         openTextFiles: "open-text-files",
+        reopenTextFile: "reopen-text-file",
         readTextFile: "read-text-file",
         saveTextFile: "save-text-file",
         saveTextFileAs: "save-text-file-as",

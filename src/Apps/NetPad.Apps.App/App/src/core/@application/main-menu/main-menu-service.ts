@@ -144,22 +144,132 @@ export class MainMenuService implements IMainMenuService {
                 ]
             },
             {
+                text: "Workspace",
+                menuItems: [
+                    {
+                        id: "workspace.new",
+                        text: "New Workspace...",
+                        click: async () => {
+                            const result = await this.dialogUtil.prompt({message: "Workspace name:", placeholder: "Workspace name"});
+                            const name = (result?.value as string | undefined)?.trim();
+                            if (name) await this.workAreaService.createWorkspace(name);
+                        },
+                    },
+                    {
+                        id: "workspace.switch",
+                        text: "Switch Workspace...",
+                        click: async () => {
+                            const workspaces = this.workAreaService.workspaceManifest.workspaces;
+                            const result = await this.dialogUtil.ask({
+                                title: "Switch Workspace",
+                                message: "Choose a workspace:",
+                                buttons: [
+                                    ...workspaces.map(workspace => ({text: workspace.name, value: workspace.id})),
+                                    {text: "Cancel", value: "cancel"},
+                                ],
+                            });
+                            if (typeof result?.value === "string" && result.value !== "cancel") {
+                                await this.workAreaService.switchWorkspace(result.value);
+                            }
+                        },
+                    },
+                    {
+                        id: "workspace.rename",
+                        text: "Rename Current Workspace...",
+                        click: async () => {
+                            const result = await this.dialogUtil.prompt({
+                                message: "Workspace name:",
+                                defaultValue: this.workAreaService.currentWorkspace.name,
+                                placeholder: "Workspace name",
+                            });
+                            const name = (result?.value as string | undefined)?.trim();
+                            if (name) await this.workAreaService.renameWorkspace(name);
+                        },
+                    },
+                    {
+                        id: "workspace.delete",
+                        text: "Delete Current Workspace",
+                        click: async () => {
+                            const result = await this.dialogUtil.ask({
+                                title: "Delete Workspace",
+                                message: `Delete '${this.workAreaService.currentWorkspace.name}'?`,
+                                buttons: [
+                                    {text: "Delete", value: "delete", isPrimary: true},
+                                    {text: "Cancel", value: "cancel"},
+                                ],
+                            });
+                            if (result?.value === "delete") await this.workAreaService.deleteWorkspace();
+                        },
+                    },
+                    {isDivider: true},
+                    {
+                        id: "workspace.shelve",
+                        text: "Shelve Current Work...",
+                        click: async () => {
+                            const result = await this.dialogUtil.prompt({
+                                message: "Shelf name:",
+                                defaultValue: `Shelf ${new Date().toLocaleString()}`,
+                                placeholder: "Shelf name",
+                            });
+                            const name = (result?.value as string | undefined)?.trim();
+                            if (name) await this.workAreaService.createShelf(name);
+                        },
+                    },
+                    {
+                        id: "workspace.restoreShelf",
+                        text: "Restore Shelf...",
+                        click: async () => {
+                            const shelves = this.workAreaService.workspaceManifest.shelves;
+                            if (shelves.length === 0) return;
+                            const result = await this.dialogUtil.ask({
+                                title: "Restore Shelf",
+                                message: "Choose a shelf:",
+                                buttons: [
+                                    ...shelves.map(shelf => ({text: shelf.name, value: shelf.id})),
+                                    {text: "Cancel", value: "cancel"},
+                                ],
+                            });
+                            if (typeof result?.value === "string" && result.value !== "cancel") {
+                                await this.workAreaService.restoreShelf(result.value);
+                            }
+                        },
+                    },
+                    {
+                        id: "workspace.deleteShelf",
+                        text: "Delete Shelf...",
+                        click: async () => {
+                            const shelves = this.workAreaService.workspaceManifest.shelves;
+                            if (shelves.length === 0) return;
+                            const result = await this.dialogUtil.ask({
+                                title: "Delete Shelf",
+                                message: "Choose a shelf to delete:",
+                                buttons: [
+                                    ...shelves.map(shelf => ({text: shelf.name, value: shelf.id})),
+                                    {text: "Cancel", value: "cancel"},
+                                ],
+                            });
+                            if (typeof result?.value === "string" && result.value !== "cancel") {
+                                await this.workAreaService.deleteShelf(result.value);
+                            }
+                        },
+                    },
+                ],
+            },
+            {
                 text: "Edit",
                 menuItems: [
                     {
                         id: "edit.undo",
                         text: "Undo",
                         icon: "undo-icon",
-                        click: async () => this.textEditorService.active?.monaco
-                            .trigger(null, "undo", null),
+                        click: async () => this.textEditorService.active?.active?.undo(),
                         helpText: "Ctrl + Z"
                     },
                     {
                         id: "edit.redo",
                         text: "Redo",
                         icon: "redo-icon",
-                        click: async () => this.textEditorService.active?.monaco
-                            .trigger(null, "redo", null),
+                        click: async () => this.textEditorService.active?.active?.redo(),
                         helpText: "Ctrl + Shift + Z"
                     },
                     {

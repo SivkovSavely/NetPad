@@ -54,6 +54,26 @@ export class BookmarkManager {
         return this.numbered.get(number);
     }
 
+    public getState(): {bookmarks: number[]; numberedBookmarks: Record<string, number>} {
+        return {
+            bookmarks: this.getBookmarks(),
+            numberedBookmarks: Object.fromEntries([...this.numbered].map(([number, line]) => [String(number), line])),
+        };
+    }
+
+    public restoreState(state: {bookmarks?: number[]; numberedBookmarks?: Record<string, number>}): void {
+        this.clear();
+        for (const line of state.bookmarks ?? []) {
+            if (Number.isInteger(line) && line > 0) this.lines.add(line);
+        }
+        for (const [numberText, line] of Object.entries(state.numberedBookmarks ?? {})) {
+            const number = Number(numberText);
+            if (!Number.isInteger(number) || number < 0 || number > 9 || !Number.isInteger(line) || line < 1) continue;
+            this.lines.add(line);
+            this.numbered.set(number, line);
+        }
+    }
+
     public updateTrackedLines(trackedLines: number[]): void {
         const oldLines = this.getBookmarks();
         const newLines = trackedLines.filter(line => Number.isInteger(line) && line > 0);

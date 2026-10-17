@@ -16,6 +16,7 @@ import {WorkAreaService} from "../../../../src/windows/main/work-area/work-area-
 import {
     IWorkAreaAppearance,
 } from "../../../../src/windows/main/work-area/work-area-appearance";
+import {IWorkspaceService} from "../../../../src/core/@application/workspaces/workspace-service";
 
 class TestViewable extends ViewableObject {
     constructor(id: string) { super(id); }
@@ -77,18 +78,39 @@ class FakeAppearance {
     public dispose(): void { /* noop */ }
 }
 
+class FakeWorkspaceService {
+    public saveCalls = 0;
+    public savedWorkspaceIds: string[] = [];
+    public manifest = {
+        version: 1,
+        isInitialized: false,
+        activeWorkspaceId: "default",
+        workspaces: [{id: "default", name: "Default", documents: [], activeHostName: "main"}],
+        shelves: [],
+    };
+    public initialize(): Promise<void> { return Promise.resolve(); }
+    public save(): Promise<void> {
+        this.saveCalls++;
+        this.savedWorkspaceIds.push(this.manifest.activeWorkspaceId);
+        this.manifest.isInitialized = true;
+        return Promise.resolve();
+    }
+}
+
 function setup(opts: {initialEnvironments?: ScriptEnvironment[]} = {}): {
     container: IContainer,
     service: WorkAreaService,
     session: FakeSession,
     scriptService: FakeScriptService,
     eventBus: FakeEventBus,
+    workspaceService: FakeWorkspaceService,
 } {
     const container = DI.createContainer();
     const session = new FakeSession();
     session.environments = opts.initialEnvironments ?? [];
     const scriptService = new FakeScriptService();
     const eventBus = new FakeEventBus();
+    const workspaceService = new FakeWorkspaceService();
 
     container.register(
         Registration.singleton(IViewerRegistry, ViewerRegistry),
@@ -97,15 +119,53 @@ function setup(opts: {initialEnvironments?: ScriptEnvironment[]} = {}): {
         Registration.instance(ISession, session as unknown as ISession),
         Registration.instance(IAppService, {} as IAppService),
         Registration.instance(IEventBus, eventBus as unknown as IEventBus),
+        Registration.instance(IWorkspaceService, workspaceService as unknown as IWorkspaceService),
     );
 
     const registry = container.get(IViewerRegistry);
     registry.register({id: "test", viewerClass: TestViewer, canHandle: v => v instanceof TestViewable});
 
-    return {container, service: container.invoke(WorkAreaService), session, scriptService, eventBus};
+    return {container, service: container.invoke(WorkAreaService), session, scriptService, eventBus, workspaceService};
 }
 
 describe("WorkAreaService.open", () => {
+    it("persists when creating a named workspace", async () => {
+        const {service, workspaceService} = setup();
+        await service.initialize();
+        await service.restoreWorkspace();
+        const initialSaveCount = workspaceService.saveCalls;
+
+        await service.createWorkspace("Test workspace");
+
+        expect(workspaceService.saveCalls).toBeGreaterThan(initialSaveCount);
+        expect(service.currentWorkspace.name).toBe("Test workspace");
+        expect(workspaceService.savedWorkspaceIds[initialSaveCount]).toBe("default");
+        expect(workspaceService.savedWorkspaceIds.at(-1)).toBe(service.currentWorkspace.id);
+        expect(workspaceService.manifest.isInitialized).toBe(true);
+        service.dispose();
+    });
+
+    it("migrates legacy per-host tab order into the workspace service", async () => {
+        localStorage.setItem("tab-bar.main.viewables-order", JSON.stringify(["second", "first"]));
+        const {service} = setup();
+
+        await service.initialize();
+
+        expect(service.getViewablesOrder("main")).toEqual(["second", "first"]);
+        localStorage.removeItem("tab-bar.main.viewables-order");
+    });
+
+    it("keeps tab order independent between viewer hosts", async () => {
+        const {service} = setup();
+        await service.initialize();
+
+        service.setViewablesOrder("main", ["one", "two"]);
+        service.setViewablesOrder("split-1", ["three"]);
+
+        expect(service.getViewablesOrder("main")).toEqual(["one", "two"]);
+        expect(service.getViewablesOrder("split-1")).toEqual(["three"]);
+    });
+
     it("uses the explicitly-supplied host", async () => {
         const {service, container} = setup();
         await service.initialize();

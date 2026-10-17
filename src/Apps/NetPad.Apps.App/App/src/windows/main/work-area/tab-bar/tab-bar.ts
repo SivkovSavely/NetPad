@@ -13,6 +13,7 @@ import {
 } from "@application";
 import {ViewableObject} from "../viewers/viewable-object";
 import {ViewerHost} from "../viewers/viewer-host";
+import {IWorkAreaService} from "../work-area-service";
 
 export class TabBar extends ViewModelBase {
     @bindable viewables: ReadonlySet<ViewableObject>;
@@ -28,6 +29,7 @@ export class TabBar extends ViewModelBase {
         @IShortcutManager private readonly shortcutManager: IShortcutManager,
         @ILogger logger: ILogger,
         private readonly settings: Settings,
+        @IWorkAreaService private readonly workAreaService: IWorkAreaService,
     ) {
         super(logger);
     }
@@ -241,11 +243,25 @@ export class TabBar extends ViewModelBase {
     }
 
     private loadViewablesOrder(): void {
+        const workspaceOrder = this.workAreaService.getViewablesOrder(this.viewerHost.name);
+        if (workspaceOrder.length > 0) {
+            this.viewablesOrder = workspaceOrder;
+            return;
+        }
+
+        if (this.workAreaService.workspaceManifest.isInitialized) {
+            this.viewablesOrder = [];
+            return;
+        }
+
         try {
             const json = localStorage.getItem(this.viewablesOrderKey);
             if (!json) return;
 
-            this.viewablesOrder = JSON.parse(json) as string[];
+            const order: unknown = JSON.parse(json);
+            if (!Array.isArray(order) || order.some(id => typeof id !== "string")) return;
+            this.viewablesOrder = order;
+            this.workAreaService.setViewablesOrder(this.viewerHost.name, order, true);
         } catch (ex) {
             this.logger.error("Failed to load viewables order", ex);
         } finally {
@@ -258,7 +274,7 @@ export class TabBar extends ViewModelBase {
             .map(e => e.getAttribute("data-id"))
             .filter(id => id !== null) as string[];
 
-        localStorage.setItem(this.viewablesOrderKey, JSON.stringify(this.viewablesOrder ?? []));
+        this.workAreaService.setViewablesOrder(this.viewerHost.name, this.viewablesOrder ?? []);
     }, 300, false);
 
     @watch<TabBar>(vm => vm.viewables.size)

@@ -53,6 +53,7 @@ import {LibraryTextFileService} from "@application/file-search/library-text-file
 import {FileSearchQuickInputService} from "@application/file-search/file-search-quick-input";
 import {IFileDocumentDialogService} from "./work-area/viewers/file-viewer/file-document-dialog-service";
 import {FileDocumentDialogService} from "./work-area/viewers/file-viewer/file-document-dialog-service-impl";
+import {IWorkspaceService, WorkspaceService} from "@application/workspaces/workspace-service";
 
 export class MainWindowBootstrapper implements IWindowBootstrapper {
     constructor(private readonly logger: ILogger) {
@@ -70,6 +71,7 @@ export class MainWindowBootstrapper implements IWindowBootstrapper {
             Registration.singleton(IDataConnectionService, DataConnectionService),
             Registration.singleton(IBackgroundService, DialogBackgroundService),
             Registration.singleton(IWorkAreaService, WorkAreaService),
+            Registration.singleton(IWorkspaceService, WorkspaceService),
             Registration.singleton(IViewerRegistry, ViewerRegistry),
             Registration.singleton(FeatureSearchService, FeatureSearchService),
             Registration.singleton(OpenViewableQuickInput, OpenViewableQuickInput),

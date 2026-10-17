@@ -6,6 +6,9 @@ export class TauriNativeTextFileService implements INativeTextFileService {
     public openTextFiles(options: FileSelectorDialogOptions): Promise<NativeTextFile[] | null> {
         return invoke<NativeTextFile[] | null>("open_text_files", {options});
     }
+    public reopenTextFile(path: string): Promise<NativeTextFile> {
+        return invoke<NativeTextFile>("reopen_text_file", {path});
+    }
     public readTextFile(handle: string): Promise<string> { return invoke<string>("read_text_file", {handle}); }
     public saveTextFile(handle: string, text: string): Promise<void> { return invoke<void>("save_text_file", {handle, text}); }
     public saveTextFileAs(text: string, options: FileSelectorDialogOptions): Promise<NativeTextFileReference | null> {

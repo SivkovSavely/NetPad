@@ -10,5 +10,6 @@ export interface ITextFileContentService {
 }
 export interface INativeTextFileService extends ITextFileContentService {
     openTextFiles(options: FileSelectorDialogOptions): Promise<NativeTextFile[] | null>;
+    reopenTextFile?(path: string): Promise<NativeTextFile>;
     saveTextFileAs(text: string, options: FileSelectorDialogOptions): Promise<NativeTextFileReference | null>;
 }

@@ -253,11 +253,6 @@ public class Session : ISession
         try
         {
             var scriptIds = _environments.Values.Select(x => x.Script.Id).ToArray();
-            if (scriptIds.Length == 0)
-            {
-                return;
-            }
-
             _trivialDataStore.Set(OpenScriptsSaveKey, scriptIds);
         }
         catch (Exception e)

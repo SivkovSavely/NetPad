@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NetPad.Apps;
 using NetPad.Apps.CQs;
 using NetPad.Apps.Security;
@@ -16,6 +17,7 @@ using NetPad.Apps.Resources;
 using NetPad.Apps.UiInterop;
 using NetPad.BackgroundServices;
 using NetPad.Common;
+using NetPad.Configuration;
 using NetPad.ExecutionModel;
 using NetPad.Host.Middlewares;
 using NetPad.Host.Swagger;
@@ -63,6 +65,10 @@ public class Startup
         services.AddTransient<ScriptService>();
         services.AddSingleton<FileSearchService>();
         services.AddTransient<IAutoSaveScriptRepository, FileSystemAutoSaveScriptRepository>();
+        services.AddSingleton<NetPad.Sessions.Workspaces.IWorkspaceStore>(provider =>
+            new FileSystemWorkspaceStore(
+                AppDataProvider.AppDataDirectoryPath.CombineFilePath("workspaces.json").Path,
+                provider.GetRequiredService<ILogger<FileSystemWorkspaceStore>>()));
 
         // Script execution mechanism
         services.AddClientServerExecutionModel();

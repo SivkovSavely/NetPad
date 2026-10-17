@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using NetPad.Application;
@@ -10,6 +11,7 @@ using NetPad.Data;
 using NetPad.DotNet;
 using NetPad.Scripts;
 using NetPad.Sessions;
+using NetPad.Sessions.Workspaces;
 
 namespace NetPad.BackgroundServices;
 
@@ -20,6 +22,7 @@ public class AppSetupAndCleanupBackgroundService(
     ISession session,
     IScriptRepository scriptRepository,
     IAutoSaveScriptRepository autoSaveScriptRepository,
+    IWorkspaceStore workspaceStore,
     ITrivialDataStore trivialDataStore,
     IPluginManager pluginManager,
     IAppStatusMessagePublisher appStatusMessagePublisher,
@@ -64,14 +67,40 @@ public class AppSetupAndCleanupBackgroundService(
         var autoSavedScripts = await autoSaveScriptRepository.GetScriptsAsync();
         await session.OpenAsync(autoSavedScripts, false);
 
+        WorkspaceDocument? workspaceDocument = null;
         try
         {
-            // Open scripts from the previous session
-            var previousSessionOpenScriptIds = trivialDataStore.Get<Guid[]>(Session.OpenScriptsSaveKey)?
-                .Where(sid => !session.IsOpen(sid))
-                .ToHashSet();
+            workspaceDocument = await workspaceStore.LoadAsync(stoppingToken);
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "Error loading workspace state");
+        }
 
-            if (previousSessionOpenScriptIds?.Count > 0)
+        var activeWorkspace = workspaceDocument?.Workspaces
+            .FirstOrDefault(workspace => workspace.Id == workspaceDocument.ActiveWorkspaceId);
+
+        try
+        {
+            HashSet<Guid>? previousSessionOpenScriptIds;
+            if (workspaceDocument?.IsInitialized == true)
+            {
+                previousSessionOpenScriptIds = activeWorkspace?.Documents
+                    .Where(document => document.Kind == "script")
+                    .Select(document => Guid.TryParse(document.Id, out var id) ? id : (Guid?)null)
+                    .Where(id => id.HasValue && !session.IsOpen(id.Value))
+                    .Select(id => id!.Value)
+                    .ToHashSet();
+            }
+            else
+            {
+                // Import the legacy session list only until the first workspace snapshot is saved.
+                previousSessionOpenScriptIds = trivialDataStore.Get<Guid[]>(Session.OpenScriptsSaveKey)?
+                    .Where(sid => !session.IsOpen(sid))
+                    .ToHashSet();
+            }
+
+            if (previousSessionOpenScriptIds is { Count: > 0 })
             {
                 var scripts = await scriptRepository.GetAsync(previousSessionOpenScriptIds);
                 await session.OpenAsync(scripts, false);
@@ -82,7 +111,24 @@ public class AppSetupAndCleanupBackgroundService(
             Logger.LogError(e, "Error opening scripts from previous session");
         }
 
-        await session.ActivateBestCandidateAsync();
+        var activeDocumentId = activeWorkspace?.ActiveDocumentId;
+        if (workspaceDocument?.IsInitialized == true
+            && activeDocumentId != null
+            && Guid.TryParse(activeDocumentId, out var activeScriptId)
+            && session.IsOpen(activeScriptId))
+        {
+            await session.ActivateAsync(activeScriptId);
+        }
+        else if (workspaceDocument?.IsInitialized == true
+                 && activeDocumentId != null
+                 && activeWorkspace?.Documents.Any(document => document.Id == activeDocumentId && document.Kind == "file") == true)
+        {
+            await session.ActivateAsync(null);
+        }
+        else
+        {
+            await session.ActivateBestCandidateAsync();
+        }
     }
 
     protected override async Task StoppingAsync(CancellationToken cancellationToken)

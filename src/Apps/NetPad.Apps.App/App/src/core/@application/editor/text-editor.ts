@@ -18,6 +18,8 @@ export interface ITextEditor extends WithDisposables {
     close(documentId: string): void;
     focus(): void;
     refreshBookmarkDecorations(document: TextDocument): void;
+    getViewState(documentId: string): unknown;
+    restoreViewState(documentId: string, state: unknown): void;
 }
 
 export class TextEditor extends ViewModelBase implements ITextEditor {
@@ -48,13 +50,18 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
         }
 
         if (currentOpen) {
-            this.viewStates.set(currentOpen.id, this.monaco.saveViewState());
+            const state = this.monaco.saveViewState();
+            this.viewStates.set(currentOpen.id, state);
+            currentOpen.viewState = state;
         }
 
         this.monaco.setModel(document.textModel);
         this.refreshBookmarkDecorations(document);
 
-        this.monaco.restoreViewState(this.viewStates.get(document.id) || null);
+        const savedViewState = this.viewStates.get(document.id)
+            ?? (document.viewState as monaco.editor.ICodeEditorViewState | null)
+            ?? null;
+        this.monaco.restoreViewState(savedViewState);
         this.revealPendingLine(document);
 
         this.active = document;
@@ -92,6 +99,22 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
             automaticLayout: true,
             glyphMargin: true,
         });
+
+        this.addDisposable(this.monaco.addAction({
+            id: "netpad.undo",
+            label: "Undo",
+            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ],
+            run: () => this.active?.undo(),
+        }));
+        this.addDisposable(this.monaco.addAction({
+            id: "netpad.redo",
+            label: "Redo",
+            keybindings: [
+                monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ,
+                monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY,
+            ],
+            run: () => this.active?.redo(),
+        }));
 
         this.updateEditorSettings();
 
@@ -155,6 +178,28 @@ export class TextEditor extends ViewModelBase implements ITextEditor {
         this.bookmarkDecorations.get(document.id)?.clear();
         const decorations = getBookmarkManager(document.id).decorations(model);
         this.bookmarkDecorations.set(document.id, this.monaco.createDecorationsCollection(decorations));
+    }
+
+    public getViewState(documentId: string): unknown {
+        let viewState = this.active?.id === documentId
+            ? this.monaco?.saveViewState()
+            : this.viewStates.get(documentId);
+        if (!viewState) {
+            return this.active?.id === documentId ? this.active.viewState ?? null : null;
+        }
+        if (this.active?.id === documentId) this.active.viewState = viewState;
+        return viewState ? JSON.parse(JSON.stringify(viewState)) : null;
+    }
+
+    public restoreViewState(documentId: string, state: unknown): void {
+        const viewState = state && typeof state === "object"
+            ? state as monaco.editor.ICodeEditorViewState
+            : null;
+        this.viewStates.set(documentId, viewState);
+        if (this.active?.id === documentId) this.active.viewState = viewState;
+        if (this.active?.id === documentId && this.monaco) {
+            this.monaco.restoreViewState(viewState);
+        }
     }
 
     private revealPendingLine(document: TextDocument): void {

@@ -6,13 +6,20 @@ import {TextLanguage} from "@application/editor/text-language";
 export type TextChangeSetter = TextDocument | "server";
 
 export class TextDocument extends WithDisposables {
+    private static readonly maxHistoryEntries = 100;
+    private static readonly maxHistoryCharacters = 2_000_000;
+
     public selection: monaco.Selection | null | undefined;
     public pendingLine?: number;
+    public viewState?: unknown;
 
     private _language: TextLanguage;
     private _text: string;
     private changeHandlers = new Set<(setter: TextChangeSetter, newText: string) => Promise<void>>();
     private _textModel?: monaco.editor.ITextModel;
+    private undoHistory: string[] = [];
+    private redoHistory: string[] = [];
+    private replayingHistory = false;
 
     constructor(public readonly id: string, language: TextLanguage, text: string) {
         super();
@@ -57,6 +64,12 @@ export class TextDocument extends WithDisposables {
     public async setText(setter: TextChangeSetter, newValue: string) {
         if (this._text === newValue) return;
 
+        if (setter === this && !this.replayingHistory) {
+            this.undoHistory.push(this._text);
+            this.redoHistory = [];
+            this.trimHistory();
+        }
+
         this._text = newValue ?? "";
 
         for (const changeHandler of this.changeHandlers) {
@@ -72,6 +85,69 @@ export class TextDocument extends WithDisposables {
         const wrappedHandler = (setter: TextChangeSetter, newValue: string) => handler(setter, newValue);
         this.changeHandlers.add(wrappedHandler);
         return new SubscriptionToken(() => this.changeHandlers.delete(wrappedHandler));
+    }
+
+    public get canUndo(): boolean {
+        return this.undoHistory.length > 0;
+    }
+
+    public get canRedo(): boolean {
+        return this.redoHistory.length > 0;
+    }
+
+    public async undo(): Promise<void> {
+        const previous = this.undoHistory.pop();
+        if (previous === undefined) return;
+        this.redoHistory.push(this._text);
+        await this.applyHistoryText(previous);
+    }
+
+    public async redo(): Promise<void> {
+        const next = this.redoHistory.pop();
+        if (next === undefined) return;
+        this.undoHistory.push(this._text);
+        await this.applyHistoryText(next);
+    }
+
+    public getHistoryState(): {undo: string[]; redo: string[]} {
+        return {undo: [...this.undoHistory], redo: [...this.redoHistory]};
+    }
+
+    public restoreHistoryState(state: {undo?: string[]; redo?: string[]}): void {
+        this.undoHistory = [...(state.undo ?? [])].filter(value => typeof value === "string");
+        this.redoHistory = [...(state.redo ?? [])].filter(value => typeof value === "string");
+        this.trimHistory();
+    }
+
+    public resetHistory(): void {
+        this.undoHistory = [];
+        this.redoHistory = [];
+    }
+
+    private async applyHistoryText(value: string): Promise<void> {
+        this.replayingHistory = true;
+        try {
+            if (this._textModel) {
+                this._textModel.setValue(value);
+            } else {
+                await this.setText(this, value);
+            }
+        } finally {
+            this.replayingHistory = false;
+            this.trimHistory();
+        }
+    }
+
+    private trimHistory(): void {
+        const totalCharacters = () => [...this.undoHistory, ...this.redoHistory]
+            .reduce((total, text) => total + text.length, 0);
+
+        while (this.undoHistory.length + this.redoHistory.length > TextDocument.maxHistoryEntries
+            || totalCharacters() > TextDocument.maxHistoryCharacters) {
+            if (this.undoHistory.length > 0) this.undoHistory.shift();
+            else if (this.redoHistory.length > 0) this.redoHistory.shift();
+            else break;
+        }
     }
 
     public changeLanguage(language: TextLanguage) {
