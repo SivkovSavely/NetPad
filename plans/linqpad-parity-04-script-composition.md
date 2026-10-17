@@ -99,7 +99,7 @@ See per-section items above; prioritize: directive resolution matrix; diagnostic
 - [ ] Section 11: built-in xUnit mode.
 - [ ] Fingerprint/OmniSharp invalidation covered for all remaining inputs.
 - [~] Focused tests added and passing; broad validation has unrelated SDK/project failures noted below.
-- [ ] Master checklist updated + commits logged below (central reconciliation only; do not edit the master in this worktree).
+- [~] Plan-local implementation commit recorded below; master checklist remains for central reconciliation.
 
 ## Progress log
 
@@ -115,4 +115,4 @@ Implementation notes:
 - A targeted `agent-build.sh` for `NetPad.Apps.App` stopped on a missing `NetPad.Apps.ScriptHost` assets file (`NETSDK1004`); the broad test run later passed `NetPad.Apps.App.Tests`.
 - Broad `scripts/agent-test.sh` completed with 893 runtime tests passing and one pre-existing .NET 7 SDK-reference test failure. It also reported unrelated `OmniSharp.NET` netstandard2.0 `KeyValuePair.Deconstruct` build errors. Apps Common, MCP, O2Html, App, and integration test projects passed.
 
-(commits appended here as they land)
+- `5a972af6 Add script composition compiler features`
