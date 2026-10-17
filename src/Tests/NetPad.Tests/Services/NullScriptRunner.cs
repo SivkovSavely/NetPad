@@ -1,4 +1,5 @@
 using NetPad.ExecutionModel;
+using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.IO;
 
 namespace NetPad.Tests.Services;
@@ -57,6 +58,10 @@ public class NullScriptRunner : IScriptRunner
     }
 
     public void InvokeScriptAction(string actionId)
+    {
+    }
+
+    public void SendControlEvent(ControlEventMessage message)
     {
     }
 

@@ -1,4 +1,5 @@
 using NetPad.IO;
+using NetPad.ExecutionModel.ClientServer.Messages;
 
 namespace NetPad.ExecutionModel;
 
@@ -53,6 +54,9 @@ public interface IScriptRunner : IDisposable
     /// (see <see cref="Presentation.Hyperlinq"/> action links).
     /// </summary>
     void InvokeScriptAction(string actionId);
+
+    /// <summary>Routes a JSON-primitive browser event to a live result control.</summary>
+    void SendControlEvent(ControlEventMessage message);
 
     /// <summary>
     /// Sends a message to the running script's host process. Supported only by runners that use

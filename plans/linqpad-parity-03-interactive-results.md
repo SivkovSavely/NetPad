@@ -78,11 +78,56 @@ No DataGrid; no EChart; no debugger; don't expose app-shell privileged APIs thro
 
 ## Completion checklist
 
-- [ ] Generic bridge implemented and all listed controls built on it
-- [ ] Chart done without EChart
-- [ ] Lifecycle/disposal verified by tests
-- [ ] Master checklist updated + commits logged below
+- [x] Generic bridge implemented and all listed controls built on it
+- [x] Chart done without EChart
+- [x] Lifecycle/disposal verified by tests
+- [N] Master checklist intentionally left for central reconciliation in the merge worktree
+- [x] Implementation notes, validation results, and user validation guidance recorded below
 
 ## Progress log
 
-(commits appended here as they land)
+- Implemented the reusable control tree, stable control ids, mutable output-slot updates, delegated control events, ScriptHost registry/dispatch, clear/disposal lifecycle, all selected controls, and `Util.Chart` with a native SVG renderer and static table fallback. No commit created in this worktree.
+
+## Implementation notes / integration decisions
+
+1. `Control.Dump()` uses the existing `ScriptOutput.OutputId` / `IsUpdate` path. The root control's stable `CT...` id is also its output id; nested controls have independent event ids but mutate the root slot. No parallel output protocol was added.
+2. `ControlEventMessage` is the only control-event message family. The frontend sends JSON primitives; multi-select values are carried as a JSON-encoded string so the message payload remains a JSON primitive. The host rejects non-primitive/oversized payloads and ignores unknown ids.
+3. The existing delegated dump-container event pattern now handles `click`, `input`, and `change`; one set of listeners is installed per container. App routing is `PATCH /scripts/{id}/controls/events` → `ScriptEnvironment.SendControlEvent` → ScriptHost dispatch.
+4. Registrations are created while rendering a control tree, refreshed when a mutable slot is rerendered, and invalidated on removed children, `Control.Dispose()`, `Util.ClearResults()`, run start, and run end. Disposing clears event delegates and collection subscriptions. `Util.KeepRunning()` from plan 02 controls whether a run remains alive for post-entrypoint callbacks.
+5. Output updates retain the original named-panel route by re-entering `OutputRouting` with the panel captured at the control's initial dump. ClearResults invalidates only controls in the target panel (or main Results).
+6. Static sinks render the current control state without registering callbacks; form controls are disabled. `ImageControl` is intentionally separate from `NetPad.Media.Image`. Generic HTML attributes reject inline event handlers, style attributes, `srcdoc`, and reserved `data-netpad-*` protocol attributes; `IFrame` always uses an empty sandbox and no app privileges.
+7. `Util.Chart` accepts labeled `ChartDataPoint` values, numeric sequences, and selector-based sequences. Mutable data/type/title changes replace its normal output slot. GUI results render responsive native SVG for line/bar/column/scatter/pie; non-interactive sinks retain the data table fallback. No chart dependency or EChart compatibility class was added.
+8. Controls are in `NetPad.Presentation.Controls`, added to default script namespaces for direct construction. `Util.Chart` remains the script-facing chart factory. The optional `ScriptRunId` field on `ControlEventMessage` is not populated because current `ScriptOutput` event DTOs do not carry a per-run id; globally unique control ids plus run-scoped registry clearing provide stale-id rejection.
+
+## Focused regression tests and validation
+
+- `InteractiveControlTests` covers stable ids and slot updates, pending pre-dump state, button/input/check/select events, single/multi-select synchronization, nested controls, tab updates, viewer updates, iframe sandboxing, chart fallback, static output, stale ids, disposal, and unsafe attributes.
+- Frontend specs cover delegated primitive events and SVG chart rendering.
+- `scripts/agent-test.sh src/Tests/NetPad.Runtime.Tests/NetPad.Runtime.Tests.csproj --filter "FullyQualifiedName~InteractiveControlTests"` — passed, 8/8.
+- `scripts/agent-build.sh src/Apps/NetPad.Apps.ScriptHost/NetPad.Apps.ScriptHost.csproj` — passed, 0 errors.
+- `scripts/agent-build.sh src/Apps/NetPad.Apps.App/NetPad.Apps.App.csproj` — passed, 0 errors.
+- `scripts/agent-test.sh` — app/MCP/common/integration suites passed; Runtime.Tests had 888 passed and one existing .NET 7 SDK reference-assembly test failure. The full build also hit the existing OmniSharp.NET `KeyValuePair.Deconstruct` compile failure on this machine.
+- `scripts/agent-jest.sh test/windows/main/panes/output-pane/components/dump-container.spec.ts test/windows/main/panes/output-pane/components/chart-view.spec.ts` — blocked because `jest` is not installed (`jest: command not found`); no package operation was run.
+
+## User validation notes
+
+In an interactive script, try:
+
+```csharp
+var button = new Button("Start");
+var lease = Util.KeepRunning();
+button.Click += (_, _) => { button.Text = "Clicked"; lease.Dispose(); };
+button.Dump();
+
+var text = new TextBox("initial") { Placeholder = "Type here" };
+text.ValueChanged += (_, _) => text.Value.Dump("Current input");
+text.Dump();
+
+var tabs = new TabControl(new TabPage("One", "first"), new TabPage("Two", "second"));
+tabs.SelectionChanged += (_, _) => tabs.SelectedTab.Dump("Selected tab");
+tabs.Dump();
+
+Util.Chart(new[] { 2d, 4d, 3d }, ChartType.Line).Dump();
+```
+
+The script remains alive until the button is clicked and its lease is released. Confirm form changes reach the script, property mutations update the original slot, charts render as SVG, and clearing Results or rerunning stops old controls from routing events.

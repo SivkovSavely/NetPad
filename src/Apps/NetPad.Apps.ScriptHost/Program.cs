@@ -25,6 +25,7 @@ ipc.On<DeleteMemCacheItemMessage>(msg => ScriptRunner.DeleteMemCacheItem(msg));
 ipc.On<ClearMemCacheMessage>(msg => ScriptRunner.ClearMemCache(msg));
 ipc.On<ExpandOutputMessage>(msg => runner.ExpandOutput(msg));
 ipc.On<InvokeScriptActionMessage>(msg => runner.InvokeScriptAction(msg));
+ipc.On<ControlEventMessage>(msg => runner.HandleControlEvent(msg));
 ipc.On<CancelScriptMessage>(msg => runner.RequestSoftCancellation(msg));
 ipc.On<JsEvalResultMessage>(msg => runner.ReceiveJsEvalResult(msg));
 ipc.On<ChildScriptCompletedMessage>(msg => runner.ReceiveChildScriptCompleted(msg));

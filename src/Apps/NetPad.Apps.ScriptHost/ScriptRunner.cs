@@ -184,6 +184,11 @@ public class ScriptRunner
         Util.InvokeScriptAction(message.ActionId);
     }
 
+    public void HandleControlEvent(ControlEventMessage message)
+    {
+        Util.DispatchControlEvent(message);
+    }
+
     public void RequestSoftCancellation(CancelScriptMessage _)
     {
         Util.RequestCooperativeCancellation();

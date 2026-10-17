@@ -3,6 +3,7 @@ using System.IO;
 using NetPad.Configuration;
 using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.Presentation;
+using NetPad.Presentation.Controls;
 
 namespace NetPad.ExecutionModel.ScriptServices;
 
@@ -39,6 +40,7 @@ public static partial class Util
         ChildRuns.Clear();
 
         ClearOnDemandRegistry();
+        ControlRegistry.Clear();
         ScriptActionRegistry.Clear();
         UtilHyperlinqRegistry.Clear();
         HtmlHeadState.Reset();
@@ -52,6 +54,7 @@ public static partial class Util
     /// </summary>
     internal static void EndInteractiveRunScope()
     {
+        ControlRegistry.Clear();
         try
         {
             _queryCancelCts?.Cancel();
@@ -108,6 +111,18 @@ public static partial class Util
             {
                 SinkError(error);
             }
+        }
+    }
+
+    internal static void DispatchControlEvent(ControlEventMessage message)
+    {
+        try
+        {
+            ControlRegistry.Dispatch(message);
+        }
+        catch (Exception ex)
+        {
+            SinkError("Control event failed: " + ex);
         }
     }
 
@@ -362,6 +377,23 @@ internal static class InteractiveResultHost
 {
     public static void SendCommand(ResultHostCommand command, string? payload = null)
     {
+        if (command == ResultHostCommand.ClearResults)
+        {
+            string? panelName = null;
+            if (payload != null)
+            {
+                try
+                {
+                    panelName = System.Text.Json.JsonSerializer.Deserialize<string>(payload);
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                }
+            }
+
+            ControlRegistry.Clear(panelName, matchPanel: true);
+        }
+
         var handler = Util.OnResultHostCommand;
         if (handler != null)
         {

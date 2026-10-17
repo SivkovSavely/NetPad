@@ -28,6 +28,7 @@ public static class HtmlPresenter
                 new DumpOptionsCollectionHtmlConverter(),
                 new CompositionHtmlConverter(),
                 new DiffResultHtmlConverter(),
+                new ControlsHtmlConverter(),
                 new ImageHtmlConverter(),
                 new AudioHtmlConverter(),
                 new VideoHtmlConverter(),

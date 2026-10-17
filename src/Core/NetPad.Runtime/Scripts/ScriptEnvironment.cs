@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using NetPad.Common;
 using NetPad.Events;
 using NetPad.ExecutionModel;
+using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.ExecutionModel.ClientServer.Events;
 using NetPad.ExecutionModel.ScriptServices;
 using NetPad.IO;
@@ -321,6 +322,11 @@ public class ScriptEnvironment : IDisposable, IAsyncDisposable
     public void InvokeScriptAction(string actionId)
     {
         _runner.InvokeScriptAction(actionId);
+    }
+
+    public void SendControlEvent(ControlEventMessage message)
+    {
+        _runner.SendControlEvent(message);
     }
 
     public void SendToScriptHost(object message)

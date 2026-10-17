@@ -228,6 +228,9 @@ export class OutputPane extends Pane {
             (path, line) => void this.session.openByPath(path).catch(() => undefined);
         container.onInvokeAction =
             actionId => void this.scriptService.invokeScriptAction(scriptId, actionId);
+        container.onControlEvent =
+            (controlId, eventType, payloadJson) =>
+                void this.scriptService.sendControlEvent(scriptId, controlId, eventType, payloadJson);
     }
 
     private handleResultHostCommand(msg: ResultHostCommandEvent) {

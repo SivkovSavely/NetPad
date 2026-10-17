@@ -12,6 +12,7 @@ using NetPad.DotNet;
 using NetPad.Dtos;
 using NetPad.Exceptions;
 using NetPad.ExecutionModel;
+using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.Scripts;
 using NetPad.Services;
 using NetPad.Sessions;
@@ -349,6 +350,14 @@ public class ScriptsController(IMediator mediator, IScriptRepository scriptRepos
     {
         var environment = await GetScriptEnvironmentAsync(id);
         environment.InvokeScriptAction(actionId);
+    }
+
+    /// <summary>Routes a delegated browser event to a live control in the script host.</summary>
+    [HttpPatch("{id:guid}/controls/events")]
+    public async Task SendControlEvent(Guid id, [FromBody] ControlEventMessage message)
+    {
+        var environment = await GetScriptEnvironmentAsync(id);
+        environment.SendControlEvent(message);
     }
 
     private async Task<Script> GetScriptAsync(Guid id)

@@ -7,6 +7,7 @@ using NetPad.Assemblies;
 using NetPad.Compilation;
 using NetPad.DotNet;
 using NetPad.Exceptions;
+using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.IO;
 using NetPad.Packages;
 using NetPad.Presentation;
@@ -263,6 +264,10 @@ public sealed class InMemoryScriptRunner : IScriptRunner
     }
 
     public void InvokeScriptAction(string actionId)
+    {
+    }
+
+    public void SendControlEvent(ControlEventMessage message)
     {
     }
 

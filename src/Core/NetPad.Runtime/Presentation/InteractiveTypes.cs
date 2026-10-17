@@ -15,7 +15,7 @@ internal static class OutputRouting
 
     public static string? PanelName => CurrentPanel.Value;
 
-    public static IDisposable EnterPanel(string name)
+    public static IDisposable EnterPanel(string? name)
     {
         var previous = CurrentPanel.Value;
         CurrentPanel.Value = name;

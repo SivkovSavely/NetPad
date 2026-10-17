@@ -1858,6 +1858,8 @@ export interface IScriptsApiClient {
 
     invokeScriptAction(id: string, actionId: string, signal?: AbortSignal | undefined): Promise<void>;
 
+    sendControlEvent(id: string, controlId: string, eventType: string, payloadJson: string, signal?: AbortSignal | undefined): Promise<void>;
+
     getScript(id: string, signal?: AbortSignal | undefined): Promise<Script>;
 
     delete(id: string, signal?: AbortSignal | undefined): Promise<void>;
@@ -2865,6 +2867,24 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             method: "PATCH",
             signal,
             headers: {}
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processInvokeScriptAction(_response);
+        });
+    }
+
+    sendControlEvent(id: string, controlId: string, eventType: string, payloadJson: string, signal?: AbortSignal): Promise<void> {
+        let url_ = this.baseUrl + "/scripts/{id}/controls/events";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            body: JSON.stringify({controlId, eventType, payloadJson}),
+            headers: {"Content-Type": "application/json"}
         };
 
         return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {

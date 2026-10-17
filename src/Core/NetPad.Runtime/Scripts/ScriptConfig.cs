@@ -145,6 +145,7 @@ public static class ScriptConfigDefaults
         //"System.Transactions",
         "System.Xml",
         "System.Xml.Linq",
-        "System.Xml.XPath"
+        "System.Xml.XPath",
+        "NetPad.Presentation.Controls"
     ];
 }

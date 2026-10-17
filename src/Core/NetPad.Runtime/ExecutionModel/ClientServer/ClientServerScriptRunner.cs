@@ -449,6 +449,11 @@ public partial class ClientServerScriptRunner : IScriptRunner
         _scriptHostProcessManager.Send(new InvokeScriptActionMessage(actionId));
     }
 
+    public void SendControlEvent(ControlEventMessage message)
+    {
+        _scriptHostProcessManager.Send(message);
+    }
+
     public void SendToScriptHost(object message)
     {
         ArgumentNullException.ThrowIfNull(message);

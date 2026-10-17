@@ -3,6 +3,7 @@ import {DisposableCollection, IDisposable, KeyCode, Util} from "@common";
 import {ResultControls} from "./result-controls";
 import {NavigationControls} from "./navigation-controls";
 import {linkifySourceLocations, parseSourceLocation} from "./source-linkify";
+import {renderChart} from "./chart-view";
 import "highlight.js/styles/monokai.min.css";
 import "katex/dist/katex.min.css";
 import {UiUtil} from "@common/utils/ui-util";
@@ -20,6 +21,9 @@ export class DumpContainer implements IDisposable {
 
     // Invoked when the user clicks a Hyperlinq action link rendered in this container
     public onInvokeAction?: (actionId: string) => void;
+
+    // Invoked for delegated events raised by a live result control
+    public onControlEvent?: (controlId: string, eventType: string, payloadJson: string) => void;
 
     // Invoked when the user clicks a source location link in dumped error output
     public onNavigateToSource?: (path: string, line?: number, column?: number) => void;
@@ -83,9 +87,17 @@ export class DumpContainer implements IDisposable {
                     this.onNavigateToSource?.(location.path, location.line, location.column);
                 }
             }
+
+            this.dispatchControlEvent(ev);
         };
         this.element.addEventListener("click", onClick);
         this.disposables.add(() => this.element.removeEventListener("click", onClick));
+
+        const onFormEvent = (ev: Event) => this.dispatchControlEvent(ev);
+        this.element.addEventListener("change", onFormEvent);
+        this.element.addEventListener("input", onFormEvent);
+        this.disposables.add(() => this.element.removeEventListener("change", onFormEvent));
+        this.disposables.add(() => this.element.removeEventListener("input", onFormEvent));
     }
 
 
@@ -315,15 +327,25 @@ export class DumpContainer implements IDisposable {
 
     private postProcessRenderedElements(elements: Element[]) {
         for (const group of elements) {
+            for (const chart of Array.from(group.querySelectorAll<HTMLElement>(".netpad-chart"))) {
+                renderChart(chart);
+            }
+
+            for (const markdown of Array.from(group.querySelectorAll(".netpad-markdown"))) {
+                this.renderMarkdown(markdown);
+            }
+
+            for (const latex of Array.from(group.querySelectorAll(".netpad-latex"))) {
+                this.renderLatex(latex);
+            }
+
             const markdownEl = group.querySelector(":scope > .netpad-markdown");
             if (markdownEl) {
-                this.renderMarkdown(markdownEl);
                 continue;
             }
 
             const latexEl = group.querySelector(":scope > .netpad-latex");
             if (latexEl) {
-                this.renderLatex(latexEl);
                 continue;
             }
 
@@ -378,6 +400,28 @@ export class DumpContainer implements IDisposable {
                 group.appendChild(script);
             }
         }
+    }
+
+    private dispatchControlEvent(ev: Event) {
+        const target = ev.target instanceof Element ? ev.target.closest("[data-netpad-event]") : null;
+        if (!target || !target.getAttribute("data-netpad-event")?.split(/\s+/).includes(ev.type)) return;
+
+        const control = target.closest("[data-netpad-control-id]");
+        const controlId = control?.getAttribute("data-netpad-control-id");
+        if (!controlId) return;
+
+        let payload: unknown = null;
+        if (target.hasAttribute("data-netpad-value")) {
+            payload = target.getAttribute("data-netpad-value");
+        } else if (target instanceof HTMLInputElement && target.type === "checkbox") {
+            payload = target.checked;
+        } else if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+            payload = target instanceof HTMLSelectElement && target.multiple
+                ? JSON.stringify(Array.from(target.selectedOptions, option => option.value))
+                : target.value;
+        }
+
+        this.onControlEvent?.(controlId, ev.type, JSON.stringify(payload));
     }
 
     private renderMarkdown(el: Element) {

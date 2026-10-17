@@ -6,6 +6,7 @@ using NetPad.Compilation;
 using NetPad.Configuration;
 using NetPad.Data.Metadata;
 using NetPad.DotNet;
+using NetPad.ExecutionModel.ClientServer.Messages;
 using NetPad.IO;
 using NetPad.Packages;
 using NetPad.Presentation;
@@ -233,6 +234,10 @@ public sealed partial class ExternalScriptRunner : IScriptRunner
     }
 
     public void InvokeScriptAction(string actionId)
+    {
+    }
+
+    public void SendControlEvent(ControlEventMessage message)
     {
     }
 

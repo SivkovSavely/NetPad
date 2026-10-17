@@ -139,6 +139,47 @@ describe("DumpContainer mutable output", () => {
     });
 });
 
+describe("DumpContainer live control events", () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    test("delegates primitive control events with the nearest control id", () => {
+        const container = createContainer();
+        const handler = jest.fn();
+        container.onControlEvent = handler;
+        container.appendOutput(output(1,
+            '<div class="group"><div data-netpad-control-id="CT1" data-netpad-control-type="TextBox">' +
+            '<input data-netpad-event="input change" value="start"></div></div>' +
+            '<div class="group"><div data-netpad-control-id="CT2" data-netpad-control-type="CheckBox">' +
+            '<input type="checkbox" data-netpad-event="change"></div></div>' +
+            '<div class="group"><div data-netpad-control-id="CT4" data-netpad-control-type="SelectBox">' +
+            '<select multiple data-netpad-event="change"><option value="a">a</option><option value="b">b</option></select></div></div>' +
+            '<div class="group"><div data-netpad-control-id="CT3" data-netpad-control-type="Button">' +
+            '<button data-netpad-event="click">Go</button></div></div>'
+        ));
+        jest.advanceTimersByTime(5);
+
+        const input = container.element.querySelector("input:not([type=checkbox])") as HTMLInputElement;
+        input.value = "typed";
+        input.dispatchEvent(new Event("input", {bubbles: true}));
+        const checkbox = container.element.querySelector("input[type=checkbox]") as HTMLInputElement;
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event("change", {bubbles: true}));
+        const select = container.element.querySelector("select") as HTMLSelectElement;
+        select.options[0].selected = true;
+        select.options[1].selected = true;
+        select.dispatchEvent(new Event("change", {bubbles: true}));
+        container.element.querySelector("button")!.dispatchEvent(new MouseEvent("click", {bubbles: true}));
+
+        expect(handler.mock.calls).toEqual([
+            ["CT1", "input", '"typed"'],
+            ["CT2", "change", "true"],
+            ["CT4", "change", JSON.stringify(JSON.stringify(["a", "b"]))],
+            ["CT3", "click", "null"]
+        ]);
+    });
+});
+
 describe("DumpContainer Hyperlinq actions and rich content", () => {
     test("invokes onInvokeAction with the data-netpad-action-id of the clicked anchor", async () => {
         const container = createContainer();
