@@ -60,7 +60,9 @@ export class Window extends WindowBase {
     }
 
     public selectSearchResult(entry: SettingsSearchEntry) {
-        this.selectedTab = this.tabs.find(tab => tab.route === entry.tabRoute);
+        const tab = this.tabs.find(tab => tab.route === entry.tabRoute);
+        if (!tab) return;
+        this.selectedTab = tab;
         setTimeout(() => {
             const root = this.settingsRoot && [...this.settingsRoot.children]
                 .find(child => child.getAttribute("case") === entry.tabRoute) as HTMLElement | undefined;

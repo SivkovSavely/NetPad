@@ -88,7 +88,7 @@ export class FileViewer extends Viewer {
     private async updatePreview(): Promise<void> {
         const viewable = this.viewable;
         const kind = this.previewKind;
-        if (!viewable || !kind || !this.previewEnabled) return;
+        if (!(viewable instanceof ViewableFileDocument) || !kind || !this.previewEnabled) return;
 
         const revision = ++this.previewRevision;
         const source = viewable.textDocument.text;

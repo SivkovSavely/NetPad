@@ -19,6 +19,7 @@ import {TextLanguage} from "@application/editor/text-language";
 import {DndType} from "@application/dnd/dnd-type";
 import {DragAndDropBase} from "@application/dnd/drag-and-drop-base";
 import {DataConnectionDnd} from "@application/dnd/data-connection-dnd";
+import type {IFileDocumentDialogService} from "../file-viewer/file-document-dialog-service";
 
 export class ViewableScriptDocument extends ViewableTextDocument {
     constructor(
@@ -27,6 +28,7 @@ export class ViewableScriptDocument extends ViewableTextDocument {
         private readonly session: ISession,
         private readonly appService: IAppService,
         private readonly workAreaService: IWorkAreaService,
+        private readonly dialogUtil: IFileDocumentDialogService,
         eventBus: IEventBus
     ) {
         super(
@@ -143,6 +145,41 @@ export class ViewableScriptDocument extends ViewableTextDocument {
 
     public override canSave(): boolean {
         return true;
+    }
+
+    public override canRevert(): boolean {
+        return !!this.environment.script.path;
+    }
+
+    public override async revert(): Promise<boolean> {
+        if (!this.canRevert()) return false;
+
+        if (this.isDirty) {
+            const result = await this.dialogUtil.ask({
+                title: "Revert Script",
+                message: `Discard changes and reload '${this.name}' from disk?`,
+                buttons: [
+                    {text: "Revert", value: "revert", isPrimary: true},
+                    {text: "Cancel", value: "cancel"},
+                ],
+            });
+            if (result?.value !== "revert") return false;
+        }
+
+        try {
+            const script = await this.scriptService.revertFromDisk(this.environment.script.id);
+            this.environment.script.code = script.code;
+            this.environment.script.config = script.config;
+            this.environment.script.dataConnection = script.dataConnection;
+            this.environment.script.isDirty = script.isDirty;
+            await this.textDocument.setText("server", script.code);
+            this.textDocument.resetHistory();
+            this.refreshDisplayProperties();
+            return true;
+        } catch (error) {
+            await this.dialogUtil.alert({title: "Could Not Revert Script", message: String(error)});
+            return false;
+        }
     }
 
     public override save(): Promise<boolean> {

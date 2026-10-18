@@ -24,6 +24,7 @@ export interface WorkspaceState {
     id: string;
     name: string;
     documents: WorkspaceDocumentState[];
+    recentFiles?: Array<{path: string; source: "library" | "native"}>;
     activeDocumentId?: string;
     activeHostName: string;
 }
@@ -106,6 +107,7 @@ export class WorkspaceService implements IWorkspaceService {
                     .map(workspace => ({
                         ...workspace,
                         documents: workspace.documents ?? [],
+                        recentFiles: workspace.recentFiles ?? [],
                         activeHostName: workspace.activeHostName || "main",
                     })) ?? [],
                 shelves: loaded.shelves ?? [],

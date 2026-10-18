@@ -16,7 +16,7 @@ import {WorkAreaService} from "../../../../src/windows/main/work-area/work-area-
 import {
     IWorkAreaAppearance,
 } from "../../../../src/windows/main/work-area/work-area-appearance";
-import {IWorkspaceService} from "../../../../src/core/@application/workspaces/workspace-service";
+import {IWorkspaceService, WorkspaceManifest} from "../../../../src/core/@application/workspaces/workspace-service";
 
 class TestViewable extends ViewableObject {
     constructor(id: string) { super(id); }
@@ -81,7 +81,7 @@ class FakeAppearance {
 class FakeWorkspaceService {
     public saveCalls = 0;
     public savedWorkspaceIds: string[] = [];
-    public manifest = {
+    public manifest: WorkspaceManifest = {
         version: 1,
         isInitialized: false,
         activeWorkspaceId: "default",
@@ -129,6 +129,28 @@ function setup(opts: {initialEnvironments?: ScriptEnvironment[]} = {}): {
 }
 
 describe("WorkAreaService.open", () => {
+    it("restores recent file paths from workspace state without persisting shell handles", async () => {
+        const {service, workspaceService} = setup();
+        workspaceService.manifest.isInitialized = true;
+        workspaceService.manifest.workspaces[0].recentFiles = [
+            {path: "/library/example.cs", source: "library"},
+            {path: "/local/example.txt", source: "native"},
+        ];
+
+        await service.initialize();
+        await service.restoreWorkspace();
+
+        expect(service.recentFiles.map(file => [file.path, file.source])).toEqual([
+            ["/library/example.cs", "library"],
+            ["/local/example.txt", undefined],
+        ]);
+        expect(service.recentFiles.every(file => file.handle.startsWith("workspace-recent:"))).toBe(true);
+
+        service.clearRecentFiles();
+        expect(workspaceService.manifest.workspaces[0].recentFiles).toEqual([]);
+        service.dispose();
+    });
+
     it("persists when creating a named workspace", async () => {
         const {service, workspaceService} = setup();
         await service.initialize();

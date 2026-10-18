@@ -157,6 +157,29 @@ public class ScriptsController(IMediator mediator, IScriptRepository scriptRepos
         return await scriptService.SaveScriptAsAsync(id);
     }
 
+    [HttpPatch("{id:guid}/revert")]
+    public async Task<Script> Revert(Guid id)
+    {
+        var environment = await GetScriptEnvironmentAsync(id);
+        var script = environment.Script;
+        if (string.IsNullOrWhiteSpace(script.Path))
+        {
+            throw new InvalidOperationException("An unsaved script cannot be reverted from disk.");
+        }
+
+        var diskScript = await scriptRepository.GetAsync(script.Path);
+        foreach (var reference in diskScript.Config.References)
+        {
+            reference.EnsureValid();
+        }
+
+        await mediator.Send(new UpdateScriptCodeCommand(script, diskScript.Code));
+        script.UpdateConfig(diskScript.Config);
+        await mediator.Send(new SetScriptDataConnectionCommand(script, diskScript.DataConnection));
+        script.IsDirty = false;
+        return script;
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task Delete(Guid id)
     {

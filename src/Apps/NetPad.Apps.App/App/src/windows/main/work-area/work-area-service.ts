@@ -203,6 +203,7 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
             this.session,
             this.appService,
             this,
+            this.container.get(IFileDocumentDialogService),
             this.eventBus,
         );
         viewable.addDisposable(viewable.textDocument.onChange(async () => this.scheduleWorkspaceSave()));
@@ -265,12 +266,22 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
             file,
             ...this._recentFiles.filter(recent => recent.path !== file.path),
         ].slice(0, 15);
+        this.persistRecentFilePaths();
         for (const callback of this.recentFilesChanged) callback();
     }
 
     public async openRecentFile(handle: string): Promise<ViewableFileDocument> {
         const reference = this._recentFiles.find(file => file.handle === handle);
         if (!reference) throw new Error("Recent text file is no longer available");
+
+        if (reference.handle.startsWith("workspace-recent:")) {
+            const file = reference.source === "library"
+                ? await this.container.get(LibraryTextFileService).openTextFile(reference.path)
+                : await this.container.get(INativeTextFileService).reopenTextFile?.(reference.path);
+            if (!file) throw new Error("This shell cannot reopen local files by path");
+            return this.openFile(file);
+        }
+
         const service = reference.source === "library"
             ? this.container.get(LibraryTextFileService)
             : this.container.get(INativeTextFileService);
@@ -280,11 +291,13 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
 
     public removeRecentFile(handle: string): void {
         this._recentFiles = this._recentFiles.filter(file => file.handle !== handle);
+        this.persistRecentFilePaths();
         for (const callback of this.recentFilesChanged) callback();
     }
 
     public clearRecentFiles(): void {
         this._recentFiles = [];
+        this.persistRecentFilePaths();
         for (const callback of this.recentFilesChanged) callback();
     }
 
@@ -308,6 +321,7 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
         if (this.restoringWorkspace) return;
         this.restoringWorkspace = true;
         try {
+            this.loadRecentFilePaths();
             for (const host of this.viewerHosts.items) {
                 const oldViewables = [...host.viewables];
                 host.removeViewables(...oldViewables);
@@ -417,6 +431,7 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
             id: Util.newGuid(),
             name: normalized,
             documents: [],
+            recentFiles: [],
             activeHostName: "main",
         };
         this.workspaceManifest.workspaces.push(workspace);
@@ -524,7 +539,9 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
         }
 
         const isMemoryCopy = !state.path;
-        if (!isMemoryCopy) this.recordRecentFile(file);
+        if (!isMemoryCopy && !this._recentFiles.some(recent => recent.path === file.path)) {
+            this.recordRecentFile(file);
+        }
         const viewable = this.createFileViewable(file, isMemoryCopy
             ? {id: state.id, name: state.name || "Recovered File", path: "", savedText: ""}
             : undefined);
@@ -693,6 +710,27 @@ export class WorkAreaService extends WithDisposables implements IWorkAreaService
             }
         }
         return documents;
+    }
+
+    private loadRecentFilePaths(): void {
+        this._recentFiles = (this.currentWorkspace.recentFiles ?? [])
+            .filter(recent => recent && typeof recent.path === "string" && recent.path.length > 0
+                && (recent.source === "library" || recent.source === "native"))
+            .slice(0, 15)
+            .map(recent => ({
+                handle: `workspace-recent:${recent.source}:${recent.path}`,
+                path: recent.path,
+                source: recent.source === "library" ? "library" : undefined,
+            }));
+        for (const callback of this.recentFilesChanged) callback();
+    }
+
+    private persistRecentFilePaths(): void {
+        this.currentWorkspace.recentFiles = this._recentFiles.map(file => ({
+            path: file.path,
+            source: file.source === "library" ? "library" : "native",
+        }));
+        this.scheduleWorkspaceSave();
     }
 
     private updateAutomaticShelf(workspace: WorkspaceState): void {

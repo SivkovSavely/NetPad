@@ -214,7 +214,7 @@ export class ScriptsList extends ViewModelBase {
             const matchingRoot = findMostSpecificScriptRoot(scriptPath, roots);
             if (multiRoot && !matchingRoot) continue;
 
-            const basePath = multiRoot ? matchingRoot : scriptsDirPath;
+            const basePath = multiRoot ? matchingRoot! : scriptsDirPath;
             const path = multiRoot
                 ? "/" + Util.trim(scriptPath.substring(basePath.length), "/")
                 : isScriptPathWithin(scriptPath, scriptsDirPath)
