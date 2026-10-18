@@ -23,9 +23,10 @@ describe("result chart renderer", () => {
         const root = document.createElement("div");
         root.setAttribute("data-chart-model", "bad json");
         root.innerHTML = "<table>fallback</table>";
+        const fallbackHtml = root.innerHTML;
 
         renderChart(root);
 
-        expect(root.querySelector("table")?.textContent).toBe("fallback");
+        expect(root.innerHTML).toBe(fallbackHtml);
     });
 });
