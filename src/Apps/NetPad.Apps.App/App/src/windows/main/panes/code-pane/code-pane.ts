@@ -4,6 +4,9 @@ import {CodeDecompilationResponse} from "@application/api";
 import {ShowCodeDecompilationEvent} from "@application/code/show-code-decompilation-event";
 import {AppWindows} from "@application/windows/app-windows";
 import {IDisposable} from "@common";
+import {LibraryTextFileService} from "@application/file-search/library-text-file-service";
+import {IWorkAreaService} from "../../work-area/work-area-service";
+import {tryOpenLoadedSource} from "./loaded-source-navigation";
 import "./code-pane.scss";
 
 export class CodePane extends Pane {
@@ -16,7 +19,9 @@ export class CodePane extends Pane {
         @IWindowService private readonly windowService: IWindowService,
         private readonly appWindows: AppWindows,
         @IEventBus private readonly eventBus: IEventBus,
-        @ISession private readonly session: ISession) {
+        @ISession private readonly session: ISession,
+        @IWorkAreaService private readonly workAreaService: IWorkAreaService,
+        private readonly libraryTextFileService: LibraryTextFileService) {
         super("Code", "code-icon");
     }
 
@@ -24,12 +29,26 @@ export class CodePane extends Pane {
         this.decompilationSubscription?.dispose();
         this.decompilationSubscription = this.eventBus.subscribe(ShowCodeDecompilationEvent, event => {
             if (event.scriptId !== this.session.active?.script.id) return;
-
-            this.decompilation = event.response;
-            this.decompilationScriptId = event.scriptId;
-            this.activeTab = "Decompiled";
-            this.activate();
+            return this.showDecompilation(event.scriptId, event.response);
         });
+    }
+
+    private async showDecompilation(scriptId: string, response: CodeDecompilationResponse): Promise<void> {
+        if (response.isSource && !response.isCurrentScriptSource && response.sourcePath) {
+            const opened = await tryOpenLoadedSource(
+                response.sourcePath,
+                response.startLine,
+                this.libraryTextFileService,
+                this.workAreaService,
+                () => scriptId === this.session.active?.script.id);
+            if (opened || scriptId !== this.session.active?.script.id) return;
+        }
+
+        if (scriptId !== this.session.active?.script.id) return;
+        this.decompilation = response;
+        this.decompilationScriptId = scriptId;
+        this.activeTab = "Decompiled";
+        this.activate();
     }
 
     public detaching() {
