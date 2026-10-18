@@ -60,7 +60,7 @@ Per-section above plus: benchmark cancellation terminates children; artifact cle
 - [x] Sections 1–5 implemented with criteria
 - [x] Platform gating messages verified
 - [x] Focused tests added/passing
-- [~] Master checklist intentionally left unchanged per task scope; plan 07 commits logged below
+- [x] Master checklist reconciled centrally; plan 07 commits logged below
 
 ## Progress log
 
@@ -70,3 +70,10 @@ Per-section above plus: benchmark cancellation terminates children; artifact cle
   - Focused validation passed: App tests 66/66, `UtilCodeInspectionTests` 9/9, focused Jest 5 suites/12 tests. Swagger generation and `git diff --check` passed.
   - Broad validation remains limited by unrelated failures: full .NET tests hit the OmniSharp.NET `KeyValuePair.Deconstruct` compile error and a Runtime test requiring unavailable .NET 7 reference assemblies; App tests passed 66/66 and Runtime tests passed 912/913. Full Jest had 46/47 suites pass, with the existing chart-view fallback assertion failing. `tsc --noEmit` reports three existing errors in `scripts-list.ts`, `file-viewer.ts`, and `settings/window.ts`.
   - The central master plan was not edited, as required by the scoped-work instruction.
+
+2026-10-18 integration reconciliation:
+
+- Loaded source definitions continue to prefer source over decompilation. Loaded `.cs` paths under configured library roots now open in Plan 05's generic file viewer at the mapped symbol line; paths outside those roots remain visible in the read-only Code pane rather than bypassing the restricted file API. Added a focused navigation test.
+- Loaded-source viewer integration commit: `67c2d4cc Open loaded sources in the generic viewer`.
+- Full Jest passed (49 suites/504 tests), and frontend `npx tsc --noEmit --pretty false` passed. App tests passed 66/66. Full .NET tests passed 924 with 5 skipped and one failure due solely to missing .NET 7 reference/implementation assemblies; standalone `OmniSharp.NET` build is now clean. Earlier chart-fallback, OmniSharp, and three TypeScript failures are resolved.
+- No GUI/manual benchmark, decompilation, or native-disassembly validation was performed; those remain user-level smoke scenarios, not test failures.

@@ -114,10 +114,10 @@ None on other plans. Provides the global-transformer seam that plan 04 loaded-so
 
 ## Completion checklist
 
-- [ ] All acceptance criteria above implemented
-- [ ] Tests listed added and passing locally (`scripts/agent-test.sh --filter <...>` narrow first)
-- [ ] Master plan checklist ticked + commit hashes logged below
-- [ ] Concise user validation notes left here
+- [x] All acceptance criteria above implemented
+- [x] Focused regression tests added and passing; broad validation limitations are recorded below
+- [x] Master plan checklist reconciled + implementation commit hashes logged below
+- [x] Concise user validation notes left here
 
 ## Status: COMPLETE (runtime + frontend; see notes)
 
@@ -137,15 +137,16 @@ None on other plans. Provides the global-transformer seam that plan 04 loaded-so
 5. **Expanded** renders as a `data-expanded` attribute (no frontend collapse behavior exists yet to honor it); FormatStrings apply to IFormattable/scalars by full or simple type name.
 6. **Script-global defaults merge point**: user-facing `Dump()` entry points and DumpContainer writes; direct internal `HtmlPresenter` calls (system notices, SQL) intentionally bypass defaults so scripts cannot restyle host messages.
 7. **DumpAsync**: interactive sessions get one slot ("AE" id) updated every 50 items; row cap stops consuming the source; cancellation appends a metatext notice; enumeration errors keep partial rows, append an error group, and rethrow.
-8. **Exception links**: anchors carry data attributes; navigation callback currently opens via `session.openByPath` best-effort (line positioning deferred to plan 05/07).
+8. **Exception links**: anchors carry data attributes; navigation callback opens via `session.openByPath` best-effort. Loaded-source symbol navigation now opens trusted configured-root files at the mapped line through the generic viewer; ordinary exception links still do not position to a line.
 
 ## Validation performed (by agent)
 
 - `scripts/agent-test.sh src/Tests/NetPad.Runtime.Tests/... --filter Presentation` → 77/77 pass.
-- Full solution `scripts/agent-test.sh` → all green except two pre-existing/environmental failures unrelated to this work:
-  - `OmniSharp.NET` vendored project fails to compile on this machine even at baseline (verified via stash).
-  - `Can_Compile_CSharp11_Features` requires .NET 7 SDK reference assemblies not installed here.
+- Historical broad validation at the time of the original Plan 01 commits had two unrelated/environmental failures: the vendored OmniSharp `KeyValuePair.Deconstruct` compile issue and the .NET 7 reference-assembly-dependent test. The former is now fixed; the latter remains an environment limitation.
 - Frontend: new `source-linkify.spec.ts` → 6/6 pass; `tsc --noEmit` clean.
+
+2026-10-18 reconciliation: final `scripts/agent-jest.sh` passed 49 suites / 504 tests. Full `scripts/agent-test.sh` passed 924 tests with 5 skipped and one failure in `CSharpCodeCompilerTests.Can_Compile_CSharp11_Features` because .NET 7 reference/implementation assemblies are not installed under `/usr/share/dotnet`. `scripts/agent-build.sh src/External/OmniSharp.NET/OmniSharp.NET.csproj` passed with 0 errors and 0 warnings. Plan 04 now registers loaded-source global `ToDump` hooks through this plan's existing registry; no second transformer registry was introduced.
+- Loaded-source registry integration commit: `6b63bf9c Complete script composition compiler integration`.
 
 ## User validation suggestions
 

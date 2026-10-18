@@ -86,33 +86,43 @@ See per-section items above; prioritize: directive resolution matrix; diagnostic
 
 ## Completion checklist
 
-- [~] Section 1: core `#load` expansion, path resolution, source mapping, and loaded-content fingerprinting implemented; `.netpad` references and OmniSharp/editor navigation remain.
-- [ ] Section 2: loaded `ToDump` registration.
-- [ ] Section 3: compile-time script references.
-- [ ] Section 4: My Extensions.
-- [ ] Section 5: persistent user snippets.
-- [~] Section 6: source-generator diagnostics are surfaced; NuGet analyzer-asset discovery, generator fingerprinting, and isolation review remain.
-- [ ] Section 7: `#:package` and `#:project` directives.
+- [~] Section 1: `.cs`/`.netpad` loading, relative/absolute/glob/transitive expansion, cycle/error diagnostics, source mapping, loaded-content fingerprinting, loaded `.netpad` namespace/reference merging, resolver integration, and OmniSharp project integration are implemented. F12 opens trusted loaded paths through the root-restricted generic file viewer; paths outside configured roots remain in the read-only Code pane. Plain diagnostics are source-mapped, but a general diagnostic-to-viewer navigation command is not wired.
+- [x] Section 2: loaded `ToDump` registration through Plan 01's registry, deterministic load order, generated module initializer, and run-lifecycle cleanup.
+- [ ] Section 3: compile-time `ScriptReference` and dependency/cycle invalidation are not implemented.
+- [ ] Section 4: My Extensions document, settings, compile integration, and OmniSharp integration are not implemented.
+- [ ] Section 5: persistent user snippet store and namespace/assembly/NuGet reference insertion are not implemented.
+- [~] Section 6: package analyzer assets are discovered and passed explicitly to generator compilation; their paths/mtime participate in the ClientServer fingerprint; generator diagnostics and load/run failures become compilation errors. Generator execution is still in-process with app-side compilation and is not isolated.
+- [ ] Section 7: `#:package`/`#:project` directives and plain `.cs` execution are not implemented.
 - [x] Section 8: GUI/headless context symbols are applied to compilation and OmniSharp project constants.
 - [x] Section 9: checked arithmetic is configurable, persisted with a checked default, fingerprinted, and applied to compilation/OmniSharp.
-- [ ] Section 10: `Main1`..`Main9` alternate entry points.
-- [ ] Section 11: built-in xUnit mode.
-- [ ] Fingerprint/OmniSharp invalidation covered for all remaining inputs.
-- [~] Focused tests added and passing; broad validation has unrelated SDK/project failures noted below.
-- [~] Plan-local implementation commit recorded below; master checklist remains for central reconciliation.
+- [x] Section 10: `Main1`..`Main9` parameterless sync/`Task` entry points, selection via `RunOptions.EntryPoint`, fingerprint/deployment-cache participation, and configurable Ctrl+Alt+Digit1–9 shortcuts.
+- [ ] Section 11: built-in xUnit query/test mode is not implemented.
+- [~] Fingerprint and OmniSharp invalidation cover loaded sources, loaded `.netpad` references, checked arithmetic, entry points, and generator assets; inputs for unimplemented references/extensions/directives/snippets are consequently not covered.
+- [x] Focused tests added and passing. Broad validation is limited by missing .NET 7 reference/implementation assemblies, detailed below.
+- [x] Follow-up implementation commit recorded below; master checklist reconciled centrally.
 
 ## Progress log
 
-Implementation notes:
+Initial implementation notes (2026-10-17; superseded where noted below):
 
-- Added `LoadDirectiveProcessor` to expand relative/absolute `.cs` and `.netpad` loads, `*`/`?`/recursive `**` patterns, transitive loads, and deterministic sorted matches. It detects cycles and unresolved directives, emits `#error` diagnostics under `#line` mappings, merges loaded using directives and `.netpad` namespaces, and hashes loaded file paths/content into `ScriptFingerprint`. The external compiler path uses the same expansion. Loaded `.netpad` assembly/package references are not merged yet.
-- Loaded source files are not yet added to OmniSharp's project, nor can they be opened from diagnostics/navigation. Integration with plan 05 must add the resolved loaded paths to the per-script project and route opening those paths through its generic text viewer.
-- Loaded `ToDump` discovery must use plan 01's existing global transformer registry. Integration requirement: register static transformers discovered in expanded loaded sources through that registry before script execution, preserving load order and the documented later-loaded-wins behavior. Do not create another registry.
-- Added source-generator diagnostics to compilation results; generator discovery still needs package analyzer-asset handling, fingerprint inputs, and the planned isolation assessment.
+- Added `LoadDirectiveProcessor` to expand relative/absolute `.cs` and `.netpad` loads, `*`/`?`/recursive `**` patterns, transitive loads, and deterministic sorted matches. It detects cycles and unresolved directives, emits `#error` diagnostics under `#line` mappings, merges loaded using directives and `.netpad` namespaces, and hashes loaded file paths/content into `ScriptFingerprint`. The initial pass did not merge `.netpad` references or update OmniSharp; both are now implemented.
+- Loaded source navigation was initially absent. OmniSharp now receives expanded code, loaded `.netpad` references, and update/removal handling. The source-definition response maps loaded code back through `#line`; trusted files in configured library roots open in Plan 05's generic viewer at the mapped line. The root-restricted file service is intentional; outside-root paths remain viewable in the read-only Code pane.
+- Loaded `ToDump` hooks are discovered and registered in load order through Plan 01's existing registry before user code runs; ScriptHost clears registrations after a run. No parallel transformer registry was added.
+- NuGet `analyzers/dotnet/cs` assets flow through dependency resolution to `CSharpCodeCompiler`; they are excluded from metadata references. Generator errors become compilation diagnostics. ClientServer fingerprints include analyzer paths/mtime. Generator code still executes app-side and is not process-isolated.
 - Checked arithmetic now defaults to checked, is persisted additively, exposed in script properties, included in fingerprints, and applied in normal, external, and in-memory compiler inputs and the OmniSharp project.
 - Added `NETPAD_GUI` for GUI compilation and `NETPAD_CLI` plus `CMD` for external/headless compilation; OmniSharp uses the GUI and target-framework symbol set.
-- Focused runtime checks passed: `LoadDirectiveProcessorTests`, `ScriptFingerprintTests`, overflow behavior, `PreprocessorSymbolsTests`, and source-generator diagnostic coverage (36 passed); `ScriptConfigCheckedArithmeticTests` passed. Frontend Jest passed (32 suites, 447 tests).
-- A targeted `agent-build.sh` for `NetPad.Apps.App` stopped on a missing `NetPad.Apps.ScriptHost` assets file (`NETSDK1004`); the broad test run later passed `NetPad.Apps.App.Tests`.
-- Broad `scripts/agent-test.sh` completed with 893 runtime tests passing and one pre-existing .NET 7 SDK-reference test failure. It also reported unrelated `OmniSharp.NET` netstandard2.0 `KeyValuePair.Deconstruct` build errors. Apps Common, MCP, O2Html, App, and integration test projects passed.
+- Historical initial validation passed focused runtime checks (36 tests) and frontend Jest (32 suites/447 tests); later runs supersede its known environment failures.
 
 - `5a972af6 Add script composition compiler features`
+
+2026-10-18 — Integration follow-up:
+
+- Added loaded `.netpad` references to both GUI and external dependency resolution and to OmniSharp. Loaded code now hoists usings without line-count changes, converts loaded file-scoped namespaces, and orders top-level statements ahead of types while retaining source mapping.
+- Added loaded-source `ToDump` module initialization/cleanup, explicit analyzer assets + ClientServer fingerprinting, `Main1`–`Main9` runner selection, and per-entry-point configurable shortcuts. `RunOptions.EntryPoint` participates in the normal and external deployment cache identity.
+- Added Plan 05 generic-viewer navigation for loaded sources when they are within configured library roots. Access outside those roots stays read-only in the Code pane; no arbitrary-path file access was added.
+- Outstanding selected work: `ScriptReference`, My Extensions, persistent snippets and their reference insertion, `#:package`, `#:project`, built-in xUnit mode, generic diagnostics-to-viewer navigation, and generator process isolation.
+- Focused .NET validation: 33 load/resolver/fingerprint tests; 21 compiler tests (the .NET 7-dependent case excluded); 8 ScriptCompiler tests; combined runtime/compiler/runner checks 71 passed; explicit generator-discovery failure test passed. Full `scripts/agent-test.sh`: 924 passed, 5 skipped, 1 failed because .NET 7 reference/implementation assemblies are unavailable under `/usr/share/dotnet` (`Can_Compile_CSharp11_Features`).
+- `scripts/agent-build.sh src/Plugins/NetPad.Plugins.OmniSharp/NetPad.Plugins.OmniSharp.csproj` passed (0 errors, 4 warnings); `scripts/agent-build.sh src/External/OmniSharp.NET/OmniSharp.NET.csproj` passed (0 errors, 0 warnings), fixing the prior `KeyValuePair.Deconstruct` build failure. ScriptHost build passed with 7 warnings.
+- Full frontend Jest passed (49 suites/504 tests); frontend `npx tsc --noEmit --pretty false` passed. App tests passed 66/66.
+- `6b63bf9c Complete script composition compiler integration` — compiler/runtime, reference resolution, generator assets, entry-point dispatch, shortcuts, and OmniSharp integration.
+- `67c2d4cc Open loaded sources in the generic viewer` — source navigation through the root-restricted Plan 05 viewer, with read-only fallback outside configured roots.

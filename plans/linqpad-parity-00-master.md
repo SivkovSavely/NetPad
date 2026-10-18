@@ -30,11 +30,11 @@ Commits on `personal` (verify with `git log upstream/main..HEAD`; hashes may mov
 **Any new mutable/live feature must reuse this OutputId mechanism — no parallel protocols.**
 
 ### Compiler/runtime
-- User code becomes top-level statements merged with embedded partial `Program` bootstrapper (`ExecutionModel.ClientServer.EmbeddedCode.Program.cs`); namespaces injected by `ClientServerCSharpCodeParser`; compile via `CSharpCodeCompiler.CreateCompilation` (`OutputKind.ConsoleApplication`, `WithOverflowChecks(true)` already set, `WithAllowUnsafe(true)`, source generators already driven via `CSharpGeneratorDriver`, embedded PDBs). Permutations: as-is / `(expr).Dump();` / append `;`.
+- User code becomes top-level statements merged with embedded partial `Program` bootstrapper (`ExecutionModel.ClientServer.EmbeddedCode.Program.cs`); namespaces injected by `ClientServerCSharpCodeParser`; compile via `CSharpCodeCompiler.CreateCompilation` (`OutputKind.ConsoleApplication`, per-script overflow checks defaulting to true, `WithAllowUnsafe(true)`, source generators via `CSharpGeneratorDriver`, embedded PDBs). Loaded-source `ToDump` registrations and alternate-entry dispatch are generated into the program.
 - `PreprocessorSymbols.For(optLevel, tfv)` → `NETPAD`, `DEBUG|RELEASE`+`TRACE`, `NET`, `NETx_0`, `NETx_0_OR_GREATER`; applied in `CodeAnalysisService.GetParseOptions`; OmniSharp gets `<DefineConstants>` via `AppOmniSharpServer.SetPreprocessorSymbolsAsync`.
-- Cache/fingerprint: `Scripts/ScriptFingerprint` (code hash, namespaces hash, references hash w/ package version + file lastWrite, kind, TFM, opt level, UseAspNet, data connection id). Consumed by `ClientServerScriptRunner.Setup` in-memory cache and `External/DeploymentCache`.
-- References: abstract `Reference` + `AssemblyFileReference`/`AssemblyImageReference`/`PackageReference`, polymorphic STJ via `JsonInheritanceConverter<Reference>` discriminator.
-- OmniSharp: `AppOmniSharpServer` writes `script.csproj` + `Bootstrapper_Program.cs`/`User_Program.cs`/`Data_Connection_Program.cs`; reacts to config-changed events.
+- Cache/fingerprint: `Scripts/ScriptFingerprint` (code, namespaces, references, loaded-source content/path, analyzer asset path/mtime, alternate entry point, checked arithmetic, kind, TFM, opt level, UseAspNet, data connection). Consumed by `ClientServerScriptRunner.Setup` in-memory cache and `External/DeploymentCache`.
+- References: abstract `Reference` + `AssemblyFileReference`/`AssemblyImageReference`/`PackageReference`, polymorphic STJ via `JsonInheritanceConverter<Reference>` discriminator. `#load` merges loaded `.netpad` namespaces/references without changing the root script's kind/TFM/data connection. NuGet analyzer assets are separate from compile metadata references.
+- OmniSharp: `AppOmniSharpServer` writes `script.csproj` + `Bootstrapper_Program.cs`/`User_Program.cs`/`Data_Connection_Program.cs`; reacts to config changes and includes expanded loaded code and loaded `.netpad` references.
 - `.netpad` format: `{id}\n{json}\n#Code\n{code}` via `Apps/NetPad.Apps.Common/Scripts/ScriptSerializer.cs` (`ScriptConfigData`).
 
 ### App/frontend
@@ -43,7 +43,7 @@ Commits on `personal` (verify with `git log upstream/main..HEAD`; hashes may mov
 - Actions/shortcuts: `BuiltinActionProvider` (Monaco actions), `shortcuts/builtin-shortcuts.ts` (`ShortcutIds`, fluent `Shortcut` builder, `configurable()`), `ShortcutManager` merges with `Settings.KeyboardShortcuts.Shortcuts` (`Configuration/KeyboardShortcutOptions.cs`).
 - Settings: `Configuration/Settings.cs` (+ sibling option classes), REST `GET/PUT /settings`, `SettingsUpdatedEvent` pushed to frontend; generated TS mirror in `api.ts`.
 - Scripts library root: `Settings.ScriptsDirectoryPath`; `FileSystemScriptRepository` enumerates recursively.
-- Recents: `RecentScriptsService` (`ITrivialDataStore`) + `/session/recent*` endpoints + `RecentScriptsChangedEvent`.
+- Recents: `RecentScriptsService` (`ITrivialDataStore`) + `/session/recent*` endpoints + `RecentScriptsChangedEvent`; generic-file MRU paths/source kinds persist with each workspace, never process-local handles.
 
 ## Plans and order
 
@@ -78,11 +78,13 @@ Minimal shared runtime/CLI change allowed only where a selected feature needs it
 
 ## Scope checklist with status
 
+Status reconciled against implementation/tests on 2026-10-18. Plans 01–03, 06, and 07 are complete; Plans 04 and 05 remain partial. See their numbered plans for outstanding acceptance criteria and validation caveats.
+
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[B]` blocked (with reason) · `[N]` intentionally not applicable/documented difference.
 
 ### Dump/presentation (plan 01) — COMPLETE at `8d607973` + `783e3a8d`
 - [x] instance `ToDump()`
-- [x] script-global/static `ToDump(object)` (via `Util.RegisterToDumpTransformer`; loaded-source auto-discovery lands with plan 04)
+- [x] script-global/static `ToDump(object)` (via `Util.RegisterToDumpTransformer`; Plan 04 auto-registers loaded-source hooks through this same registry)
 - [x] richer `DumpOptions` (MaxRows/MaxDepth/Expanded/IncludeMembers/ExcludeMembers/FormatStrings)
 - [x] `DumpOptions.Default` / global dump defaults equivalent (`Util.DumpDefaults`)
 - [x] complete public `DumpContainer` (Title/CssClasses/Options/AppendContent/ClearContent)
@@ -131,112 +133,112 @@ Implemented across commits recorded in plan 02's progress log. Notable documente
 - [x] named result panels
 - [x] `DumpToNewPanel` equivalent
 
-### Interactive results (plan 03)
-- [ ] generic live `Control`
-- [ ] `Button`
-- [ ] `TextBox`
-- [ ] `TextArea`
-- [ ] `CheckBox`
-- [ ] `SelectBox`
-- [ ] `Div`
-- [ ] `Span`
-- [ ] interactive `Image`
-- [ ] `FlexBox`
-- [ ] `TabControl`
-- [ ] `MarkdownViewer`
-- [ ] `LatexViewer`
-- [ ] `IFrame`
-- [ ] `Util.Chart`
-- [ ] live C#↔DOM property updates
-- [ ] live DOM→C# events/state
-- [ ] lifecycle/disposal/stale callback handling
+### Interactive results (plan 03) — COMPLETE
+- [x] generic live `Control`
+- [x] `Button`
+- [x] `TextBox`
+- [x] `TextArea`
+- [x] `CheckBox`
+- [x] `SelectBox`
+- [x] `Div`
+- [x] `Span`
+- [x] interactive `Image`
+- [x] `FlexBox`
+- [x] `TabControl`
+- [x] `MarkdownViewer`
+- [x] `LatexViewer`
+- [x] `IFrame`
+- [x] `Util.Chart`
+- [x] live C#↔DOM property updates
+- [x] live DOM→C# events/state
+- [x] lifecycle/disposal/stale callback handling
 - [N] EChart — explicitly excluded
 - [N] DataGrid — explicitly excluded
 
-### Script composition (plan 04)
-- [ ] `#load` `.cs`
-- [ ] `#load` NetPad script where appropriate
-- [ ] relative/absolute load paths
-- [ ] wildcard loads
-- [ ] recursive wildcard loads
-- [ ] transitive loads/cycle handling
-- [ ] diagnostics mapped to loaded source
-- [ ] navigation into loaded source
-- [ ] loaded `ToDump` support
+### Script composition (plan 04) — PARTIAL
+- [x] `#load` `.cs`
+- [x] `#load` NetPad script where appropriate
+- [x] relative/absolute load paths
+- [x] wildcard loads
+- [x] recursive wildcard loads
+- [x] transitive loads/cycle handling
+- [x] diagnostics mapped to loaded source
+- [~] navigation into loaded source (configured-root files open in the generic viewer; outside-root paths stay read-only in Code pane)
+- [x] loaded `ToDump` support through Plan 01's registry
 - [ ] compile-time script references
 - [ ] My Extensions
 - [ ] user snippets
 - [ ] snippet namespaces
 - [ ] snippet assembly references
 - [ ] snippet NuGet references
-- [ ] source generators (note: `CSharpCodeCompiler` already drives generators from referenced assemblies — verify coverage incl. analyzer assets from packages, fingerprinting, isolation)
+- [~] source generators (NuGet analyzer assets, diagnostics, and cache invalidation implemented; generator execution is not isolated)
 - [ ] `#:package`
 - [ ] `#:project`
-- [ ] GUI/CLI/headless preprocessor distinction
-- [ ] `CMD` compatibility where appropriate
-- [ ] query-wide checked arithmetic (note: compiler already compiles with `OverflowChecks(true)`; make it configurable per script defaulting to current behavior)
-- [ ] `Main1`…`Main9`
-- [ ] configurable commands/shortcuts for alternate entry points
+- [x] GUI/CLI/headless preprocessor distinction
+- [x] `CMD` compatibility where appropriate
+- [x] query-wide checked arithmetic, configurable and defaulting to prior checked behavior
+- [x] `Main1`…`Main9`
+- [x] configurable commands/shortcuts for alternate entry points
 - [ ] built-in xUnit query/test mode
 
-### Editor/application UX (plan 05)
-- [ ] global feature search
-- [ ] searchable Settings
-- [ ] searchable open-document switcher
-- [ ] Recent Files / MRU
-- [ ] additional script-library roots
-- [ ] full-text search across script roots
-- [ ] arbitrary text files/extensions
-- [ ] Markdown live preview
-- [ ] HTML live preview
-- [ ] Revert File to Disk
-- [ ] per-script CPU monitor
-- [ ] per-script memory monitor
-- [ ] ordinary bookmarks
-- [ ] next/previous/clear bookmark
-- [ ] numbered bookmarks 0–9
+### Editor/application UX (plan 05) — PARTIAL
+- [~] global feature search (menu actions and settings tabs indexed; individual setting controls/non-menu actions are not globally indexed)
+- [x] searchable Settings controls
+- [x] searchable open-document switcher
+- [x] Recent Files / MRU (generic-file paths persist per workspace; handles do not)
+- [~] additional script-library roots (root discovery/search supported; explicit configured-root chooser for new-script targets remains)
+- [x] full-text search across script roots
+- [x] arbitrary text files/extensions
+- [x] Markdown live preview
+- [x] HTML live preview
+- [x] Revert File to Disk for generic files and saved `.netpad` scripts
+- [x] per-script CPU monitor
+- [x] per-script memory monitor
+- [x] ordinary bookmarks
+- [x] next/previous/clear bookmark
+- [x] numbered bookmarks 0–9
 
-### Sessions/workspaces (plan 06)
-- [ ] restore all saved open documents
-- [ ] restore all unsaved open documents
-- [ ] restore generic files
-- [ ] restore tab ordering (currently localStorage; move into versioned workspace state)
-- [ ] restore active document/viewer
-- [ ] restore cursor/selection/view state
-- [ ] preserve unsaved modifications to saved files
-- [ ] disk-change conflict handling
-- [ ] persist undo history
-- [ ] persist redo history
-- [ ] cap history size
-- [ ] named workspaces
-- [ ] workspace create/rename/switch/delete
-- [ ] default workspace
-- [ ] shelving
-- [ ] automatic safe shelf during restart/exit when appropriate
-- [ ] list/restore/delete shelves
-- [ ] shelf conflict handling
-- [ ] crash-safe/versioned persistence
+### Sessions/workspaces (plan 06) — COMPLETE (manual conflict/shelf flows remain to smoke-test)
+- [x] restore all saved open documents
+- [x] restore all unsaved open documents
+- [x] restore generic files
+- [x] restore tab ordering in versioned workspace state
+- [x] restore active document/viewer
+- [x] restore cursor/selection/view state
+- [x] preserve unsaved modifications to saved files
+- [x] disk-change conflict handling
+- [x] persist undo history
+- [x] persist redo history
+- [x] cap history size
+- [x] named workspaces
+- [x] workspace create/rename/switch/delete
+- [x] default workspace
+- [x] shelving
+- [x] automatic safe shelf during restart/exit when appropriate
+- [x] list/restore/delete shelves
+- [x] shelf conflict handling
+- [x] crash-safe/versioned persistence
 
-### Benchmarking (plan 07)
-- [ ] benchmark selected code command
-- [ ] BenchmarkDotNet
-- [ ] isolated benchmark process
-- [ ] live mutable progress/results
-- [ ] final statistics table
-- [ ] chart
-- [ ] cancellation
-- [ ] current script references/framework integration
+### Benchmarking (plan 07) — COMPLETE
+- [x] benchmark selected code command
+- [x] BenchmarkDotNet
+- [x] isolated benchmark process
+- [x] live mutable progress/results
+- [x] final statistics table
+- [x] chart
+- [x] cancellation
+- [x] current script references/framework integration
 
-### Code inspection/decompilation (plan 07)
-- [ ] native/JIT disassembly
-- [ ] Code pane native view
-- [ ] F12 external-symbol decompilation
-- [ ] SourceLink/source preferred over decompilation
-- [ ] cached generated decompiled documents
-- [ ] programmatic C# decompilation helper
-- [ ] programmatic IL helper where appropriate
-- [ ] programmatic native/JIT disassembly helper
-- [ ] navigation into loaded `.cs` source
+### Code inspection/decompilation (plan 07) — COMPLETE
+- [x] native/JIT disassembly
+- [x] Code pane native view
+- [x] F12 external-symbol decompilation
+- [x] SourceLink/source preferred over decompilation
+- [x] cached generated decompiled documents
+- [x] programmatic C# decompilation helper
+- [x] programmatic IL helper where appropriate
+- [x] programmatic native/JIT disassembly helper
+- [x] navigation into loaded `.cs` source (generic viewer when root-authorized; read-only Code-pane fallback otherwise)
 - [N] debugger — excluded
 - [N] AI-assisted anything — excluded
 
@@ -245,8 +247,8 @@ Implemented across commits recorded in plan 02's progress log. Notable documente
 1. **Mutable outputs**: single protocol = `ScriptOutput.OutputId`/`IsUpdate` end-to-end (host writer → IPC → frontend slot replace). Live controls (plan 03) layer event delegation + typed request messages on top; they do not get their own output channel.
 2. **ToDump** (final): script-global transformer first, then instance hooks chained across transformation results; interception via a first-position O2Html converter + converter-less fallback serializer; per-traversal reference marks + 16-step guard against cycles; hook errors render as per-node error groups. See plan 01 notes.
 3. **DumpOptions precedence**: explicit call/container > `Util.DumpDefaults` (script-global, runtime-only) > NetPad Results settings (already applied via `PresentationSettings`/serializer limits) > built-ins. Unset members are `null` so they never override lower layers. Changing `DumpDefaults` never writes app Settings.
-4. **Checked arithmetic**: `CSharpCodeCompiler` already sets `OverflowChecks(true)` globally; add per-script `ScriptConfig` flag persisted optionally; absent ⇒ true (current behavior preserved); LINQPad-style toggle exposed in script properties UI.
-5. **Source generators**: generator driver already exists in `CSharpCodeCompiler`; plan 04 focuses on NuGet analyzer asset discovery, fingerprint inputs, diagnostics surfacing, isolation review.
+4. **Checked arithmetic**: per-script `ScriptConfig.CheckedArithmetic` is persisted optionally; absent ⇒ true (previous behavior preserved); the toggle participates in normal/external/in-memory compilation, OmniSharp, and fingerprints.
+5. **Source generators**: NuGet `analyzers/dotnet/cs` package assets are resolved separately from metadata references, fingerprinted for ClientServer compilation, and diagnostics/failures reach normal compile diagnostics. Generation still runs in-process in the app-side compiler; process isolation remains outstanding.
 6. **Workspace/session state**: versioned JSON documents in `ITrivialDataStore` (atomic write + backup rotation), separate save keys per workspace; localStorage tab-order migrates into it.
 7. **Named panels** (plan 02): frontend dynamic tabs inside output pane backed by per-panel `DumpContainer`s; `ScriptOutput` gains optional panel routing field (additive, defaults null = main results); headless fold buffer flattens panels sequentially with headings.
 8. **Live-control bridge** (plan 03): C# `Control` tree serialized as HTML with `data-netpad-control-id`; property mutations emit slot updates; DOM events delegated once per dump container (pattern of `[data-on-demand-id]`), forwarded via one typed IPC message carrying control id/event/payload JSON; ScriptHost dispatches to registered handlers; registries cleared on rerun/clear.
@@ -259,6 +261,15 @@ Documented per plan as discovered; master list:
 - Windows-centric capabilities (registry, WMI, some dialogs) are replaced by cross-platform equivalents with graceful unavailability.
 - `EChart` deliberately absent; `Util.Chart` is NetPad-native.
 - Grid/DataGrid absent; rich dumps remain read-only HTML tables.
+- Loaded source paths outside configured library roots are shown read-only in the Code pane; opening them in the editable generic file viewer is restricted to configured roots and native shell file boundaries.
+
+## Reconciliation checkpoint (2026-10-18)
+
+- **Complete:** Plans 01, 02, 03, 06, and 07. Their numbered checklists and progress logs now agree with this master checklist.
+- **Partial:** Plan 04 still lacks compile-time script references, My Extensions, persistent snippets/reference insertion, `#:package`, `#:project`, xUnit mode, general diagnostic-to-viewer navigation, and generator process isolation. Plan 05 still lacks global feature-search indexing for individual setting controls/non-menu actions and a configured-root chooser for new-script targets. These are unimplemented acceptance criteria, not validation failures.
+- **Integration commits:** `6b63bf9c` (Plan 04 compiler/runtime/OmniSharp), `589d24be` (Plan 05 saved-script Revert and generic-file MRU), `67c2d4cc` (loaded-source viewer integration), and `99788a6d` (chart fallback Jest expectation). Loaded `.netpad` configuration references resolve in GUI/external runs and OmniSharp; loaded-source `ToDump` hooks use Plan 01's registry and clear with ScriptHost lifecycle; `Main1`–`Main9` run options/cache/shortcuts are integrated; loaded source opens in the generic viewer when allowed by the configured-root boundary. Saved `.netpad` Revert reloads code and configuration from disk; generic-file MRU persists path/source references per workspace without shell handles.
+- **Validation:** `scripts/agent-jest.sh` passed 49 suites / 504 tests; frontend `npx tsc --noEmit --pretty false` passed; App tests passed 66/66. Full `scripts/agent-test.sh` passed 924 tests, skipped 5, and had one environment-only failure: `CSharpCodeCompilerTests.Can_Compile_CSharp11_Features` requires unavailable .NET 7 reference/implementation assemblies under `/usr/share/dotnet`. The OmniSharp `KeyValuePair.Deconstruct` issue is fixed; standalone OmniSharp.NET build passed with 0 errors/0 warnings.
+- **Manual validation not run:** workspace disk-conflict/shelf flows and Plan 07 benchmark/disassembly user smoke scenarios. The GUI was not launched, consistent with `AGENTS.md`.
 
 ## Completion protocol
 

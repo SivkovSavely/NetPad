@@ -81,7 +81,7 @@ No DataGrid; no EChart; no debugger; don't expose app-shell privileged APIs thro
 - [x] Generic bridge implemented and all listed controls built on it
 - [x] Chart done without EChart
 - [x] Lifecycle/disposal verified by tests
-- [N] Master checklist intentionally left for central reconciliation in the merge worktree
+- [x] Master checklist reconciled centrally
 - [x] Implementation notes, validation results, and user validation guidance recorded below
 
 ## Progress log
@@ -108,6 +108,8 @@ No DataGrid; no EChart; no debugger; don't expose app-shell privileged APIs thro
 - `scripts/agent-build.sh src/Apps/NetPad.Apps.App/NetPad.Apps.App.csproj` — passed, 0 errors.
 - `scripts/agent-test.sh` — app/MCP/common/integration suites passed; Runtime.Tests had 888 passed and one existing .NET 7 SDK reference-assembly test failure. The full build also hit the existing OmniSharp.NET `KeyValuePair.Deconstruct` compile failure on this machine.
 - `scripts/agent-jest.sh test/windows/main/panes/output-pane/components/dump-container.spec.ts test/windows/main/panes/output-pane/components/chart-view.spec.ts` — blocked because `jest` is not installed (`jest: command not found`); no package operation was run.
+
+2026-10-18 reconciliation: the earlier chart fallback assertion was incorrect under JSDOM because it moved table text outside the `root` element; the renderer behavior was correct. Commit `99788a6d` updates the test to compare normalized `root.innerHTML`. The final full `scripts/agent-jest.sh` run passed 49 suites / 504 tests, including the chart fallback. The broad .NET run passed 924 tests with 5 skipped; its only failure is the environment's missing .NET 7 reference/implementation assemblies. The previous OmniSharp `KeyValuePair.Deconstruct` build failure was fixed and `OmniSharp.NET` builds cleanly. See Plans 04/05 for cross-plan integration and updated validation details.
 
 ## User validation notes
 

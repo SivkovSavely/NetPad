@@ -66,7 +66,7 @@ Listed per-section above; add crash-safety test simulating truncated newest file
 - [x] Sections 1–6 implemented with criteria
 - [x] Migration + fallback paths covered by regression tests
 - [~] Focused tests cover atomic backup recovery, document-state round trips, tab-order migration, bookmark/history persistence and workspace creation; manual conflict-choice and shelf flows are not automated yet
-- [ ] Master checklist intentionally left untouched per the branch/worktree constraint
+- [x] Master checklist reconciled centrally
 - [x] Plan 06 implementation commit logged below
 
 ## Progress log
@@ -77,7 +77,8 @@ Listed per-section above; add crash-safety test simulating truncated newest file
 - Startup imports `session.openScripts` only until the first workspace snapshot is persisted. Afterwards it opens the active workspace's script ids, preserves the existing auto-save-script recovery path, and the session store now records an empty open list when the last script is closed.
 - Added frontend snapshot/restore for scripts and generic files, host/tab order, active document/host, Monaco JSON view state, bookmarks, dirty buffers, and bounded undo/redo snapshots. Legacy `tab-bar.*.viewables-order` keys migrate to the default workspace and are removed only after a successful save.
 - Added named workspace create/rename/switch/delete actions and shelf create/list/restore/delete actions to the main menu. Dirty work is kept in per-workspace automatic recovery shelves; disk-changed generic files require a keep-buffer, take-disk, or split-copy choice. Native files reopen through the existing trusted shell boundary using their persisted absolute path; library files use the root-restricted library service.
-- Reused plan 05 `ViewableFileDocument` and `BookmarkManager`; native handles remain process-local. No changes were made to the master plan or other numbered plans. Script-file Revert remains the plan 05 gap; generic-file Revert clears the edit journal after confirmation.
+- Reused plan 05 `ViewableFileDocument` and `BookmarkManager`; native handles remain process-local. Generic-file Revert clears the edit journal after confirmation. Script-file Revert was completed in the 2026-10-18 Plan 05 follow-up.
+- Generic-file Recent/MRU is now persisted in each workspace as ordered path/source references only; process-local native handles are reopened through the shell boundary. It remains separate from the ordered open-document list.
 - Focused tests added for workspace JSON round-trip/backup fallback, legacy tab-order migration, workspace creation, bounded edit-history replay, bookmark round-trip, and empty-session persistence.
 
 Validation:
@@ -91,3 +92,11 @@ Validation:
 - Broad `scripts/agent-jest.sh` — 42 suites / 483 tests passed; one unrelated plan 03 chart fallback assertion failed in `chart-view.spec.ts`.
 - App `tsc --noEmit` reports three existing errors in plan 05 files (`scripts-list.ts`, `file-viewer.ts`, `settings/window.ts`). ElectronHostHook `tsc` is blocked by missing `electron`, `socket.io`, and Node type dependencies.
 - Plan 06 implementation commit: `Implement workspaces, sessions, and shelving`.
+
+2026-10-18 reconciliation:
+
+- Rechecked the cross-plan workspace integration after saved-script Revert and persistent Recent Files landed. Revert uses the workspace's existing script state/history machinery; generic MRU paths do not serialize shell handles.
+- Final frontend validation passed: `scripts/agent-jest.sh` (49 suites/504 tests), including workspace/editor/file-viewer coverage; `npx tsc --noEmit --pretty false` passed after fixing the three TypeScript errors previously recorded above. The earlier chart fallback failure is corrected as documented in Plan 03.
+- Final broad .NET validation passed 924 tests with 5 skipped and one environment-only failure requiring unavailable .NET 7 reference assemblies. The previously recorded `OmniSharp.NET` Deconstruct error is fixed; standalone build passed with 0 errors/0 warnings.
+- Manual-only validation remains: exercise disk conflict choices and shelf create/list/restore/delete flows in the GUI. No GUI was launched per repository validation policy.
+- Cross-plan implementation commits: `589d24be Add script revert and persistent file recents`; `67c2d4cc Open loaded sources in the generic viewer`.
