@@ -101,6 +101,19 @@ public class ScriptDependencyResolverTests
     }
 
     [Fact]
+    public async Task Additional_Loaded_Script_References_Are_Included_Without_Mutating_Root_Config()
+    {
+        var script = CreateScript();
+        var loadedReference = new AssemblyFileReference("/loaded/Loaded.dll");
+        var dependencies = await CreateResolver().GetDependenciesAsync(script, [loadedReference], CancellationToken.None);
+
+        var reference = Assert.Single(dependencies.References, x => x.Reference == loadedReference);
+        Assert.Equal(Dependant.Script, reference.Dependant);
+        Assert.Equal(DependencyLoadStrategy.LoadInPlace, reference.LoadStrategy);
+        Assert.Empty(script.Config.References);
+    }
+
+    [Fact]
     public async Task DataConnection_WithSourceCode_AddsCodeDependency()
     {
         var dataConnection = CreateMockDataConnection();

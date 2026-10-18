@@ -48,7 +48,9 @@ internal static class ParseAndCompile
         ICodeCompiler codeCompiler,
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
-        SourceCodeCollection additionalCode)
+        HashSet<string> analyzerFilePaths,
+        SourceCodeCollection additionalCode,
+        string? entryPoint = null)
     {
         var loadedSources = LoadDirectiveProcessor.Process(code, script.Path);
         ParseAndCompileResult? asIsResult = null;
@@ -56,7 +58,10 @@ internal static class ParseAndCompile
         for (var ixPerm = 0; ixPerm < _permutations.Count; ixPerm++)
         {
             var permutation = _permutations[ixPerm];
-            var pResult = permutation(loadedSources.Code);
+            var codeToCompile = script.Config.Kind == ScriptKind.Program
+                ? loadedSources.GetCompilationCode(script.Path, entryPoint)
+                : loadedSources.Code;
+            var pResult = permutation(codeToCompile);
 
             if (!pResult.shouldAttempt)
             {
@@ -70,8 +75,10 @@ internal static class ParseAndCompile
                 codeCompiler,
                 referenceAssemblyImages,
                 referenceAssemblyPaths,
+                analyzerFilePaths,
                 additionalCode,
-                loadedSources.AdditionalUsings);
+                loadedSources.AdditionalUsings,
+                loadedSources.GetToDumpInitializerCode());
 
             if (result.CompilationResult.Success)
             {
@@ -95,8 +102,10 @@ internal static class ParseAndCompile
         ICodeCompiler codeCompiler,
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
+        HashSet<string> analyzerFilePaths,
         SourceCodeCollection additionalCode,
-        IReadOnlyList<string> additionalUsings)
+        IReadOnlyList<string> additionalUsings,
+        string toDumpInitializerCode)
     {
         var parsingResult = codeParser.Parse(
             script,
@@ -108,10 +117,15 @@ internal static class ParseAndCompile
                 AdditionalUsings = additionalUsings.ToArray()
             });
 
-        parsingResult.BootstrapperProgram.Code.Update(parsingResult.BootstrapperProgram.Code.Value?
+        var bootstrapperCode = parsingResult.BootstrapperProgram.Code.Value?
             .Replace("SCRIPT_ID", script.Id.ToString())
             .Replace("SCRIPT_NAME", script.Name)
-            .Replace("SCRIPT_LOCATION", script.Path));
+            .Replace("SCRIPT_LOCATION", script.Path);
+        if (script.Config.Kind == ScriptKind.Program)
+        {
+            bootstrapperCode += Environment.NewLine + toDumpInitializerCode;
+        }
+        parsingResult.BootstrapperProgram.Code.Update(bootstrapperCode);
 
         var fullProgram = parsingResult.GetFullProgram();
 
@@ -124,6 +138,7 @@ internal static class ParseAndCompile
             .WithUseAspNet(script.Config.UseAspNet)
             .WithOverflowChecks(script.Config.CheckedArithmetic)
             .WithCompilationContext(ScriptCompilationContext.Headless);
+        compilationInput.AnalyzerFileReferences.UnionWith(analyzerFilePaths);
 
         var compilationResult = codeCompiler.Compile(compilationInput);
 

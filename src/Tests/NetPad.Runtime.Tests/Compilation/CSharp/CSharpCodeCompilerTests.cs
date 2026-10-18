@@ -4,9 +4,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NetPad.CodeAnalysis;
 using NetPad.Compilation;
 using NetPad.Compilation.CSharp;
+using NetPad.Compilation.Directives;
 using NetPad.Configuration;
 using NetPad.DotNet;
 using NetPad.Utilities;
+using NetPad.Presentation;
 
 namespace NetPad.Runtime.Tests.Compilation.CSharp;
 
@@ -66,13 +68,78 @@ public class CSharpCodeCompilerTests(ITestOutputHelper testOutputHelper)
     public void Returns_Source_Generator_Diagnostics_Alongside_Emit_Diagnostics()
     {
         var code = GetProgram("int unused = 0;");
-        var input = new CompilationInput(code, DotNetFrameworkVersion.DotNet6,
-            assemblyFileReferences: [typeof(DiagnosticSourceGenerator).Assembly.Location]);
+        var input = new CompilationInput(code, DotNetFrameworkVersion.DotNet6);
+        input.AnalyzerFileReferences.Add(typeof(DiagnosticSourceGenerator).Assembly.Location);
 
         var result = CreateCSharpCodeCompiler().Compile(input);
 
         Assert.Contains(result.Diagnostics, d => d.Id == DiagnosticSourceGenerator.DiagnosticId);
         Assert.Contains(result.Diagnostics, d => d.Id == "CS0219");
+    }
+
+    [Fact]
+    public void Source_Generator_Discovery_Failure_Is_A_Compilation_Error()
+    {
+        var input = new CompilationInput(GetProgram(""), DotNetFrameworkVersion.DotNet9);
+        input.AnalyzerFileReferences.Add(Path.Combine(Path.GetTempPath(), "missing-generator.dll"));
+
+        var result = CreateCSharpCodeCompiler().Compile(input);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Id == "NPADGENLOAD"
+                                                         && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Loaded_ToDump_Transformers_Register_Through_Module_Initializer()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var loadedPath = Path.Combine(directory, "transformer.cs");
+        var rootPath = Path.Combine(directory, "root.cs");
+        File.WriteAllText(loadedPath,
+            "namespace Loaded; public static class Transformer { public static object? ToDump(object? value) => value; }");
+
+        try
+        {
+            var loaded = LoadDirectiveProcessor.Process(
+                "#load \"transformer.cs\"\nusing System.Text;\nvar value = new StringBuilder();",
+                rootPath);
+            var code = string.Join(Environment.NewLine, loaded.AdditionalUsings.Select(@using => $"using {@using};"))
+                       + Environment.NewLine + loaded.GetCompilationCode(rootPath)
+                       + Environment.NewLine + loaded.GetToDumpInitializerCode();
+            var result = CreateCSharpCodeCompiler().Compile(new CompilationInput(
+                code,
+                DotNetFrameworkVersion.DotNet9));
+
+            Assert.True(result.Success, result.Diagnostics.Select(d => d.GetMessage()).JoinToString("|"));
+
+            DumpTransformer.Clear();
+            var assembly = Assembly.Load(result.AssemblyBytes);
+            assembly.EntryPoint!.Invoke(null, [Array.Empty<string>()]);
+            Assert.True(DumpTransformer.IsActive);
+        }
+        finally
+        {
+            DumpTransformer.Clear();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Alternate_Entry_Point_Runs_Without_Top_Level_Code()
+    {
+        const string source = "Program.Count = 100;\n" +
+                              "public partial class Program { public static int Count; public static void Main1() { Count++; } }";
+        var loaded = LoadDirectiveProcessor.Process(source, "/tmp/entry-point.cs");
+        var code = loaded.GetCompilationCode("/tmp/entry-point.cs", "Main1")
+                   + Environment.NewLine + loaded.GetToDumpInitializerCode();
+        var result = CreateCSharpCodeCompiler().Compile(new CompilationInput(code, DotNetFrameworkVersion.DotNet9));
+
+        Assert.True(result.Success, result.Diagnostics.Select(d => d.GetMessage()).JoinToString("|"));
+        var assembly = Assembly.Load(result.AssemblyBytes);
+        assembly.EntryPoint!.Invoke(null, [Array.Empty<string>()]);
+        Assert.Equal(1, assembly.GetType("Program")!.GetField("Count")!.GetValue(null));
     }
 
     [Theory]

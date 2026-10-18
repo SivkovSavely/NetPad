@@ -25,4 +25,20 @@ public interface IScriptCompiler
         string code,
         Script script,
         CancellationToken cancellationToken);
+
+    /// <summary>Parses and compiles the script using an alternate entry point.</summary>
+    /// <param name="code">The source code to compile.</param>
+    /// <param name="script">The target script.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="entryPoint">Optional alternate entry point to invoke instead of top-level statements.</param>
+    Task<ParseAndCompileResult?> ParseAndCompileAsync(
+        string code,
+        Script script,
+        CancellationToken cancellationToken,
+        string? entryPoint)
+    {
+        return entryPoint == null
+            ? ParseAndCompileAsync(code, script, cancellationToken)
+            : throw new NotSupportedException($"{GetType().Name} does not support alternate entry points.");
+    }
 }

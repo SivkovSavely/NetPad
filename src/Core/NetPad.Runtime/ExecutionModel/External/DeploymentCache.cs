@@ -20,7 +20,10 @@ public class DeploymentCache(DirectoryPath cacheRoot)
         return new DeploymentDirectory(dirPath, true);
     }
 
-    public DeploymentDirectory GetOrCreateDeploymentDirectory(Script script, bool forceCreateNew = false)
+    public DeploymentDirectory GetOrCreateDeploymentDirectory(
+        Script script,
+        bool forceCreateNew = false,
+        string? entryPoint = null)
     {
         // Build cache folders are named like this:
         // {ScriptId}_{ScriptFingerprint}
@@ -31,7 +34,7 @@ public class DeploymentCache(DirectoryPath cacheRoot)
 
         var cacheRootDir = cacheRoot.GetInfo();
         var scriptId = script.Id.ToString();
-        var fingerprint = script.GetFingerprint();
+        var fingerprint = script.GetFingerprint() with { EntryPoint = entryPoint };
         var fingerprintUuid = fingerprint.CalculateUuid().ToString();
         var expectedDirName = $"{scriptId}_{fingerprintUuid}";
         var expectedDirPath = Path.Combine(cacheRootDir.FullName, expectedDirName);

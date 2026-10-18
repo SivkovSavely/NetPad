@@ -44,13 +44,27 @@ public class ScriptCompiler(
         }
     ];
 
-    public async Task<ParseAndCompileResult?> ParseAndCompileAsync(
+    public Task<ParseAndCompileResult?> ParseAndCompileAsync(
         string code,
         Script script,
         CancellationToken cancellationToken)
     {
+        return ParseAndCompileAsync(code, script, cancellationToken, null);
+    }
+
+    public async Task<ParseAndCompileResult?> ParseAndCompileAsync(
+        string code,
+        Script script,
+        CancellationToken cancellationToken,
+        string? entryPoint = null)
+    {
         var loadedSources = LoadDirectiveProcessor.Process(code, script.Path);
-        var dependencies = await scriptDependencyResolver.GetDependenciesAsync(script, cancellationToken);
+        var dependencies = loadedSources.AdditionalReferences.Count == 0
+            ? await scriptDependencyResolver.GetDependenciesAsync(script, cancellationToken)
+            : await scriptDependencyResolver.GetDependenciesAsync(
+                script,
+                loadedSources.AdditionalReferences,
+                cancellationToken);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -69,7 +83,7 @@ public class ScriptCompiler(
             .Where(x => x.Dependant != Dependant.ScriptHost)
             .SelectMany(x => x.Assets)
             .DistinctBy(x => x.Path)
-            .Where(x => x.IsManagedAssembly)
+            .Where(x => x.IsManagedAssembly && !x.IsAnalyzerAsset)
             .Select(x => new
             {
                 x.Path,
@@ -81,13 +95,23 @@ public class ScriptCompiler(
             .Select(x => x.Path)
             .ToHashSet();
 
+        var analyzerReferencePaths = dependencies.References
+            .SelectMany(x => x.Assets)
+            .Where(x => x.IsAnalyzerAsset)
+            .Select(x => x.Path)
+            .ToHashSet();
+
         return TryPermutations(
-            loadedSources.Code,
+            script.Config.Kind == ScriptKind.Program
+                ? loadedSources.GetCompilationCode(script.Path, entryPoint)
+                : loadedSources.Code,
             script,
             referenceAssemblyImages,
             referenceAssemblyFiles,
+            analyzerReferencePaths,
             new SourceCodeCollection(dependencies.Code.SelectMany(x => x.Code)),
             loadedSources.AdditionalUsings,
+            loadedSources.GetToDumpInitializerCode(),
             cancellationToken);
     }
 
@@ -95,8 +119,10 @@ public class ScriptCompiler(
         Script script,
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
+        HashSet<string> analyzerReferencePaths,
         SourceCodeCollection additionalCode,
         IReadOnlyList<string> additionalUsings,
+        string toDumpInitializerCode,
         CancellationToken cancellationToken)
     {
         ParseAndCompileResult? firstResult = null;
@@ -120,8 +146,10 @@ public class ScriptCompiler(
                 script,
                 referenceAssemblyImages,
                 referenceAssemblyPaths,
+                analyzerReferencePaths,
                 additionalCode,
                 additionalUsings,
+                toDumpInitializerCode,
                 cancellationToken);
 
             if (result?.CompilationResult.Success == true)
@@ -143,8 +171,10 @@ public class ScriptCompiler(
         Script script,
         IList<AssemblyImage> referenceAssemblyImages,
         HashSet<string> referenceAssemblyPaths,
+        HashSet<string> analyzerReferencePaths,
         SourceCodeCollection additionalCode,
         IReadOnlyList<string> additionalUsings,
+        string toDumpInitializerCode,
         CancellationToken cancellationToken)
     {
         var parsingResult = codeParser.Parse(
@@ -157,10 +187,15 @@ public class ScriptCompiler(
                 AdditionalUsings = additionalUsings.ToArray()
             });
 
-        parsingResult.BootstrapperProgram.Code.Update(parsingResult.BootstrapperProgram.Code.Value?
+        var bootstrapperCode = parsingResult.BootstrapperProgram.Code.Value?
             .Replace("SCRIPT_ID", script.Id.ToString())
             .Replace("SCRIPT_NAME", script.Name)
-            .Replace("SCRIPT_LOCATION", script.Path));
+            .Replace("SCRIPT_LOCATION", script.Path);
+        if (script.Config.Kind == ScriptKind.Program)
+        {
+            bootstrapperCode += Environment.NewLine + toDumpInitializerCode;
+        }
+        parsingResult.BootstrapperProgram.Code.Update(bootstrapperCode);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -177,6 +212,8 @@ public class ScriptCompiler(
             .WithOptimizationLevel(script.Config.OptimizationLevel)
             .WithUseAspNet(script.Config.UseAspNet)
             .WithOverflowChecks(script.Config.CheckedArithmetic);
+
+        compilationInput.AnalyzerFileReferences.UnionWith(analyzerReferencePaths);
 
         var compilationResult = codeCompiler.Compile(compilationInput);
 

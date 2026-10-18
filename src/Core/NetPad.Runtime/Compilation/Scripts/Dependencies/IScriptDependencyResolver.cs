@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using NetPad.DotNet;
 using NetPad.Scripts;
 using O2Html;
 
@@ -24,4 +25,17 @@ public interface IScriptDependencyResolver
     /// Gets all dependencies a script needs to run.
     /// </summary>
     Task<ScriptDependencies> GetDependenciesAsync(Script script, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets dependencies for a script plus references contributed by loaded scripts or directives.
+    /// </summary>
+    Task<ScriptDependencies> GetDependenciesAsync(
+        Script script,
+        IReadOnlyCollection<Reference> additionalReferences,
+        CancellationToken cancellationToken)
+    {
+        return additionalReferences.Count == 0
+            ? GetDependenciesAsync(script, cancellationToken)
+            : throw new NotSupportedException($"{GetType().Name} does not support additional script references.");
+    }
 }

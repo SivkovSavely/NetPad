@@ -156,7 +156,11 @@ public sealed class InMemoryScriptRunner : IScriptRunner
             //.Union(runOptions.AdditionalReferences)
             .GetAssetsAsync(_script.Config.TargetFrameworkVersion, _packageProvider);
 
-        var referenceAssemblyPaths = assets.Where(a => a.IsManagedAssembly).Select(a => a.Path).ToHashSet();
+        var referenceAssemblyPaths = assets
+            .Where(a => a.IsManagedAssembly && !a.IsAnalyzerAsset)
+            .Select(a => a.Path)
+            .ToHashSet();
+        var analyzerFilePaths = assets.Where(a => a.IsAnalyzerAsset).Select(a => a.Path).ToHashSet();
 
         var fullProgram = parsingResult.GetFullProgram()
             .ToCodeString()
@@ -164,12 +168,14 @@ public sealed class InMemoryScriptRunner : IScriptRunner
                 $"{InMemoryRunnerCSharpCodeParser.BootstrapperClassName}.OutputWriteLine")
             .Replace("Console.Write", $"{InMemoryRunnerCSharpCodeParser.BootstrapperClassName}.OutputWrite");
 
-        var compilationResult = _codeCompiler.Compile(new CompilationInput(
+        var compilationInput = new CompilationInput(
                 fullProgram,
                 _script.Config.TargetFrameworkVersion,
                 referenceAssemblyImages.Select(a => a.Image).ToHashSet(),
                 referenceAssemblyPaths)
-            .WithOverflowChecks(_script.Config.CheckedArithmetic));
+            .WithOverflowChecks(_script.Config.CheckedArithmetic);
+        compilationInput.AnalyzerFileReferences.UnionWith(analyzerFilePaths);
+        var compilationResult = _codeCompiler.Compile(compilationInput);
 
         if (!compilationResult.Success)
         {

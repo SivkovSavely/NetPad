@@ -73,6 +73,12 @@ public class CompilationInput(
     /// </summary>
     public HashSet<string> AssemblyFileReferences { get; } = assemblyFileReferences ?? [];
 
+    /// <summary>
+    /// File paths of analyzer assemblies that should be loaded as source generators.
+    /// These paths are independent from metadata references.
+    /// </summary>
+    public HashSet<string> AnalyzerFileReferences { get; } = [];
+
     public CompilationInput WithOutputKind(OutputKind outputKind)
     {
         OutputKind = outputKind;

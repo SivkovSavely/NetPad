@@ -60,9 +60,9 @@ namespace OmniSharp.Stdio
 
                 if (_configuration.EnvironmentVariables != null)
                 {
-                    foreach (var (key, value) in _configuration.EnvironmentVariables)
+                    foreach (var environmentVariable in _configuration.EnvironmentVariables)
                     {
-                        environmentVariables[key] = value;
+                        environmentVariables[environmentVariable.Key] = environmentVariable.Value;
                     }
                 }
 

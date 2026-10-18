@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using NetPad.Common;
 using NetPad.Compilation;
+using NetPad.Compilation.Directives;
 using NetPad.Compilation.Scripts;
 using NetPad.Compilation.Scripts.Dependencies;
 using NetPad.DotNet;
@@ -52,7 +53,8 @@ public partial class ClientServerScriptRunner
 
         // 1. Compute fingerprint for the effective code being run
         var effectiveCode = runOptions.SpecificCodeToRun ?? _script.Code;
-        var fingerprintHash = ScriptFingerprint.Create(
+        var loadedSources = LoadDirectiveProcessor.Process(effectiveCode, _script.Path);
+        var fingerprint = ScriptFingerprint.Create(
             effectiveCode,
             _script.Config.Namespaces,
             _script.Config.References,
@@ -63,10 +65,14 @@ public partial class ClientServerScriptRunner
             _script.DataConnection?.Id,
             _script.Path,
             _script.Config.CheckedArithmetic
-        ).CalculateHash();
+        ) with { EntryPoint = runOptions.EntryPoint };
 
         // 2. Try compilation cache — local copy avoids TOCTOU if another thread invalidates
         var cache = _compilationCache;
+        var cachedAnalyzerAssetsHash = cache == null
+            ? string.Empty
+            : ScriptFingerprint.HashAnalyzerAssets(cache.Dependencies.References.SelectMany(x => x.Assets));
+        var fingerprintHash = (fingerprint with { AnalyzerAssetsHash = cachedAnalyzerAssetsHash }).CalculateHash();
         bool compilationCacheHit = cache != null && cache.FingerprintHash == fingerprintHash;
 
         ScriptDependencies dependencies;
@@ -82,7 +88,16 @@ public partial class ClientServerScriptRunner
         {
             // Cache miss, resolve dependencies and compile
             _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Gathering dependencies...");
-            dependencies = await _scriptDependencyResolver.GetDependenciesAsync(_script, cancellationToken);
+            dependencies = loadedSources.AdditionalReferences.Count == 0
+                ? await _scriptDependencyResolver.GetDependenciesAsync(_script, cancellationToken)
+                : await _scriptDependencyResolver.GetDependenciesAsync(
+                    _script,
+                    loadedSources.AdditionalReferences,
+                    cancellationToken);
+
+            var analyzerAssetsHash = ScriptFingerprint.HashAnalyzerAssets(
+                dependencies.References.SelectMany(x => x.Assets));
+            fingerprintHash = (fingerprint with { AnalyzerAssetsHash = analyzerAssetsHash }).CalculateHash();
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -90,7 +105,13 @@ public partial class ClientServerScriptRunner
             }
 
             _ = _appStatusMessagePublisher.PublishTransientAsync(_script.Id, "Compiling...");
-            var result = await _scriptCompiler.ParseAndCompileAsync(effectiveCode, _script, cancellationToken);
+            var result = runOptions.EntryPoint == null
+                ? await _scriptCompiler.ParseAndCompileAsync(effectiveCode, _script, cancellationToken)
+                : await _scriptCompiler.ParseAndCompileAsync(
+                    effectiveCode,
+                    _script,
+                    cancellationToken,
+                    runOptions.EntryPoint);
 
             if (result == null || cancellationToken.IsCancellationRequested)
             {

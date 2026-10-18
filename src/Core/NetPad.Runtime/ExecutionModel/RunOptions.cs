@@ -23,6 +23,11 @@ public class RunOptions(string? specificCodeToRun = null)
     public string? SpecificCodeToRun { get; set; } = specificCodeToRun;
 
     /// <summary>
+    /// Runs a parameterless static alternate entry point (Main1 through Main9) instead of top-level statements.
+    /// </summary>
+    public string? EntryPoint { get; set; }
+
+    /// <summary>
     /// Stores an options object of type <typeparamref name="TOptions"/> in the current <see cref="RunOptions"/> instance.
     /// </summary>
     /// <typeparam name="TOptions">The type of the options object to store.</typeparam>

@@ -16,11 +16,19 @@ public class ScriptDependencyResolver(
     /// </summary>
     public async Task<ScriptDependencies> GetDependenciesAsync(Script script, CancellationToken cancellationToken)
     {
+        return await GetDependenciesAsync(script, [], cancellationToken);
+    }
+
+    public async Task<ScriptDependencies> GetDependenciesAsync(
+        Script script,
+        IReadOnlyCollection<Reference> additionalReferences,
+        CancellationToken cancellationToken)
+    {
         var references = new List<ReferenceDependency>();
         var code = new List<CodeDependency>();
 
         // Add script references
-        references.AddRange(script.Config.References
+        references.AddRange(script.Config.References.Concat(additionalReferences).Distinct()
             .Select(x => new ReferenceDependency(x, Dependant.Script, DependencyLoadStrategy.LoadInPlace)));
 
         if (cancellationToken.IsCancellationRequested)

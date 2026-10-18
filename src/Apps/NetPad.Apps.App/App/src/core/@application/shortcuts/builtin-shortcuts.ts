@@ -48,6 +48,15 @@ export enum ShortcutIds {
     clearBookmarks = "shortcut.editor.bookmark.clear",
     searchFiles = "shortcut.files.search",
     benchmarkSelection = "shortcut.benchmark.selection",
+    runEntryPoint1 = "shortcut.documents.runEntryPoint1",
+    runEntryPoint2 = "shortcut.documents.runEntryPoint2",
+    runEntryPoint3 = "shortcut.documents.runEntryPoint3",
+    runEntryPoint4 = "shortcut.documents.runEntryPoint4",
+    runEntryPoint5 = "shortcut.documents.runEntryPoint5",
+    runEntryPoint6 = "shortcut.documents.runEntryPoint6",
+    runEntryPoint7 = "shortcut.documents.runEntryPoint7",
+    runEntryPoint8 = "shortcut.documents.runEntryPoint8",
+    runEntryPoint9 = "shortcut.documents.runEntryPoint9",
 }
 
 const bookmarkNumberKeys: KeyCode[] = [
@@ -241,6 +250,31 @@ export const BuiltinShortcuts = [
         .captureDefaultKeyCombo()
         .configurable()
         .enabled(),
+
+    ...[
+        [ShortcutIds.runEntryPoint1, "Main1", KeyCode.Digit1],
+        [ShortcutIds.runEntryPoint2, "Main2", KeyCode.Digit2],
+        [ShortcutIds.runEntryPoint3, "Main3", KeyCode.Digit3],
+        [ShortcutIds.runEntryPoint4, "Main4", KeyCode.Digit4],
+        [ShortcutIds.runEntryPoint5, "Main5", KeyCode.Digit5],
+        [ShortcutIds.runEntryPoint6, "Main6", KeyCode.Digit6],
+        [ShortcutIds.runEntryPoint7, "Main7", KeyCode.Digit7],
+        [ShortcutIds.runEntryPoint8, "Main8", KeyCode.Digit8],
+        [ShortcutIds.runEntryPoint9, "Main9", KeyCode.Digit9],
+    ].map(([id, entryPoint, key]) => new Shortcut(id as string, `Run ${entryPoint}`)
+        .withCtrlKey()
+        .withAltKey()
+        .withKey(key as KeyCode)
+        .hasAction(ctx => {
+            const environment = ctx.session.active;
+            if (!environment) return;
+            const options = new RunOptions();
+            options.entryPoint = entryPoint as string;
+            return ctx.container.get(IScriptService).run(environment.script.id, options);
+        })
+        .captureDefaultKeyCombo()
+        .configurable()
+        .enabled()),
 
     new Shortcut(ShortcutIds.benchmarkSelection, "Benchmark Selection")
         .withCtrlKey()

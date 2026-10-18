@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using OmniSharp.Models.Events;
 using NetPad.Compilation;
+using NetPad.Compilation.Directives;
 using NetPad.Compilation.Scripts.Dependencies;
 using NetPad.Configuration;
 using NetPad.Data;
@@ -47,7 +48,7 @@ public class AppOmniSharpServer(
     private readonly ILogger _logger = logger;
     private readonly List<EventSubscriptionToken> _subscriptionTokens = [];
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _bufferUpdateSemaphores = new();
-    private readonly CodeParsingOptions _codeParsingOptions = new();
+    private readonly HashSet<Reference> _loadedSourceReferences = [];
     private IOmniSharpStdioServer? _omniSharpServer;
     private CancellationTokenSource? _backgroundTasksCts;
     private TaskCompletionSource? _projectLoadedTcs;
@@ -86,6 +87,17 @@ public class AppOmniSharpServer(
             environment.Script.Config.CheckedArithmetic ? "true" : "false");
 
         await SetPreprocessorSymbolsAsync();
+
+        var loadedSources = LoadDirectiveProcessor.Process(environment.Script.Code, environment.Script.Path);
+        _loadedSourceReferences.UnionWith(loadedSources.AdditionalReferences);
+        try
+        {
+            await Project.AddReferencesAsync(_loadedSourceReferences);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to add loaded-source references to the OmniSharp project");
+        }
 
         await Project.AddReferencesAsync(
             scriptDependencyResolver
@@ -708,8 +720,8 @@ public class AppOmniSharpServer(
     /// </summary>
     private void WriteInitialCodeToDisk()
     {
-        _codeParsingOptions.IncludeAspNetUsings = environment.Script.Config.UseAspNet;
-        var parsingResult = codeParser.Parse(environment.Script, options: _codeParsingOptions);
+        var loadedSources = LoadDirectiveProcessor.Process(environment.Script.Code, environment.Script.Path);
+        var parsingResult = ParseForOmniSharp(environment.Script, loadedSources);
 
         var userCode = parsingResult.UserProgram.Code.Value;
         File.WriteAllText(Project.UserProgramFilePath,
@@ -727,9 +739,9 @@ public class AppOmniSharpServer(
         await WaitForProjectLoadedAsync();
 
         var script = environment.Script;
-        _codeParsingOptions.IncludeAspNetUsings = script.Config.UseAspNet;
-
-        var parsingResult = codeParser.Parse(script, options: _codeParsingOptions);
+        var loadedSources = LoadDirectiveProcessor.Process(script.Code, script.Path);
+        await UpdateLoadedSourceReferencesAsync(script, loadedSources.AdditionalReferences);
+        var parsingResult = ParseForOmniSharp(script, loadedSources);
         await UpdateOmniSharpCodeBufferWithBootstrapperProgramAsync(parsingResult);
         await UpdateOmniSharpCodeBufferWithUserProgramAsync(parsingResult);
 
@@ -737,6 +749,60 @@ public class AppOmniSharpServer(
         {
             await eventBus.PublishAsync(new OmniSharpAsyncBufferUpdateCompletedEvent(environment.Script.Id));
         }
+    }
+
+    private CodeParsingResult ParseForOmniSharp(Script script, LoadDirectiveResult loadedSources)
+    {
+        return codeParser.Parse(script, loadedSources.Code, new CodeParsingOptions
+        {
+            IncludeAspNetUsings = script.Config.UseAspNet,
+            AdditionalUsings = loadedSources.AdditionalUsings.ToArray()
+        });
+    }
+
+    private async Task UpdateLoadedSourceReferencesAsync(Script script, IReadOnlyCollection<Reference> references)
+    {
+        var desired = references.ToHashSet();
+        var added = desired.Except(_loadedSourceReferences).ToArray();
+        var removed = _loadedSourceReferences.Except(desired)
+            .Where(reference => !script.Config.References.Contains(reference))
+            .ToArray();
+
+        if (removed.Length > 0 && script.DataConnection != null)
+        {
+            var resources = await dataConnectionResourcesCache.GetResourcesAsync(
+                script.DataConnection,
+                script.Config.TargetFrameworkVersion);
+            var dataConnectionReferences = (resources.RequiredReferences ?? [])
+                .Concat(resources.Assembly == null ? [] : [new AssemblyImageReference(resources.Assembly)])
+                .ToHashSet();
+            removed = removed.Where(reference => !dataConnectionReferences.Contains(reference)).ToArray();
+        }
+
+        if (added.Length > 0 || removed.Length > 0)
+        {
+            try
+            {
+                await Project.AddReferencesAsync(added);
+                await Project.RemoveReferencesAsync(removed);
+                var restoreResult = await Project.RestoreAsync();
+                if (!restoreResult.Succeeded)
+                {
+                    _logger.LogError(
+                        "Restoring the OmniSharp project after loaded-source reference updates failed.\n{Output}\n{Error}",
+                        restoreResult.Output, restoreResult.Error);
+                }
+
+                await NotifyOmniSharpServerProjectFileChangedAsync();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Failed to update OmniSharp loaded-source references");
+            }
+        }
+
+        _loadedSourceReferences.Clear();
+        _loadedSourceReferences.UnionWith(desired);
     }
 
     private async Task UpdateOmniSharpCodeBufferWithUserProgramAsync(CodeParsingResult parsingResult)

@@ -115,6 +115,7 @@ public class ScriptRunner
         }
         finally
         {
+            DumpTransformer.Clear();
             Util.EndInteractiveRunScope();
             GcUtil.CollectAndWait();
         }

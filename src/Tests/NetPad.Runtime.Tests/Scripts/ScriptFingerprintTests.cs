@@ -225,4 +225,31 @@ public class ScriptFingerprintTests
         Assert.Equal(a.CalculateHash(), b.CalculateHash());
         Assert.Equal(a.CalculateUuid(), b.CalculateUuid());
     }
+
+    [Fact]
+    public void Analyzer_Asset_Paths_Are_Classified_And_Fingerprinted()
+    {
+        var firstAsset = new ReferenceAsset("/packages/generator/1.0.0/analyzers/dotnet/cs/netstandard2.0/Generator.dll");
+        var secondAsset = new ReferenceAsset("/packages/generator/1.0.0/analyzers/dotnet/cs/Generator.dll");
+        var ordinaryAsset = new ReferenceAsset("/packages/generator/1.0.0/lib/netstandard2.0/Generator.dll");
+
+        Assert.True(firstAsset.IsAnalyzerAsset);
+        Assert.True(secondAsset.IsAnalyzerAsset);
+        Assert.False(ordinaryAsset.IsAnalyzerAsset);
+        Assert.NotEqual(
+            ScriptFingerprint.HashAnalyzerAssets([firstAsset]),
+            ScriptFingerprint.HashAnalyzerAssets([secondAsset]));
+        Assert.NotEqual(
+            Make("x", ["System"]).CalculateHash(),
+            (Make("x", ["System"]) with { AnalyzerAssetsHash = ScriptFingerprint.HashAnalyzerAssets([firstAsset]) }).CalculateHash());
+    }
+
+    [Fact]
+    public void Alternate_Entry_Point_Changes_Compilation_Fingerprint()
+    {
+        var regular = Make("x", ["System"]);
+        var alternate = regular with { EntryPoint = "Main1" };
+
+        Assert.NotEqual(regular.CalculateHash(), alternate.CalculateHash());
+    }
 }

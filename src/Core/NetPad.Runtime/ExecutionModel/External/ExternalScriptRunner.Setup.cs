@@ -3,6 +3,7 @@ using System.Reflection;
 using Microsoft.CodeAnalysis;
 using NetPad.Common;
 using NetPad.Compilation;
+using NetPad.Compilation.Directives;
 using NetPad.Configuration;
 using NetPad.Data;
 using NetPad.DotNet;
@@ -26,7 +27,7 @@ public partial class ExternalScriptRunner
     {
         var deploymentDirectory = noCache
             ? _deploymentCache.CreateTempDeploymentDirectory()
-            : _deploymentCache.GetOrCreateDeploymentDirectory(_script, forceRebuild);
+            : _deploymentCache.GetOrCreateDeploymentDirectory(_script, forceRebuild, runOptions.EntryPoint);
 
         if (deploymentDirectory.ContainsDeployment)
         {
@@ -52,6 +53,9 @@ public partial class ExternalScriptRunner
 
         // Add script references
         references.AddRange(_script.Config.References);
+        references.AddRange(LoadDirectiveProcessor.Process(
+            runOptions.SpecificCodeToRun ?? _script.Code,
+            _script.Path).AdditionalReferences);
 
         // TODO find another way. 2 issues with this:
         // 1. It increases build time because it has to resolve dependency graph of package, download missing...etc
@@ -94,7 +98,7 @@ public partial class ExternalScriptRunner
 
         // Get assembly file assets
         var assemblyFilePaths = referenceAssets
-            .Where(a => a.IsManagedAssembly)
+            .Where(a => a.IsManagedAssembly && !a.IsAnalyzerAsset)
             .Select(x => new
             {
                 x.Path,
@@ -104,6 +108,11 @@ public partial class ExternalScriptRunner
             .GroupBy(a => a.AssemblyName.Name)
             .Select(grp => grp.OrderBy(x => x.AssemblyName.Version).Last())
             .Select(x => x.Path)
+            .ToHashSet();
+
+        var analyzerFilePaths = referenceAssets
+            .Where(a => a.IsAnalyzerAsset)
+            .Select(a => a.Path)
             .ToHashSet();
 
 
@@ -126,7 +135,9 @@ public partial class ExternalScriptRunner
             _codeCompiler,
             images,
             assemblyFilePaths,
-            additionalCode);
+            analyzerFilePaths,
+            additionalCode,
+            runOptions.EntryPoint);
 
         if (!compilationResult.Success)
         {

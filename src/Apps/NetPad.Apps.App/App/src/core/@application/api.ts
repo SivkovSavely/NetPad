@@ -2074,6 +2074,8 @@ export interface IScriptsApiClient {
 
     saveAs(id: string, signal?: AbortSignal | undefined): Promise<boolean>;
 
+    revertFromDisk(id: string, signal?: AbortSignal | undefined): Promise<Script>;
+
     deleteFolder(path: string | undefined, signal?: AbortSignal | undefined): Promise<void>;
 
     run(id: string, options: RunOptions, signal?: AbortSignal | undefined): Promise<void>;
@@ -2515,6 +2517,40 @@ export class ScriptsApiClient extends ApiClientBase implements IScriptsApiClient
             });
         }
         return Promise.resolve<boolean>(null as any);
+    }
+
+    revertFromDisk(id: string, signal?: AbortSignal): Promise<Script> {
+        let url_ = this.baseUrl + "/scripts/{id}/revert";
+        if (id === undefined || id === null)
+            throw new Error("The parameter 'id' must be defined.");
+        url_ = url_.replace("{id}", encodeURIComponent("" + id));
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "PATCH",
+            signal,
+            headers: {"Accept": "application/json"}
+        };
+
+        return this.makeFetchCall(url_, options_, () => this.http.fetch(url_, options_)).then((_response: Response) => {
+            return this.processRevertFromDisk(_response);
+        });
+    }
+
+    protected processRevertFromDisk(response: Response): Promise<Script> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+                const resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+                return Script.fromJS(resultData200);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+                return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<Script>(null as any);
     }
 
     saveAs(id: string, signal?: AbortSignal): Promise<boolean> {
@@ -7363,6 +7399,8 @@ export interface ICreateScriptDto {
 export class RunOptions implements IRunOptions {
     /** Gets or sets a snippet of code to run instead of the full script. */
     specificCodeToRun?: string | undefined;
+    /** Selects a parameterless static alternate script entry point. */
+    entryPoint?: string | undefined;
 
     constructor(data?: IRunOptions) {
         if (data) {
@@ -7376,6 +7414,7 @@ export class RunOptions implements IRunOptions {
     init(_data?: any) {
         if (_data) {
             this.specificCodeToRun = _data["specificCodeToRun"];
+            this.entryPoint = _data["entryPoint"];
         }
     }
 
@@ -7389,6 +7428,7 @@ export class RunOptions implements IRunOptions {
     toJSON(data?: any) {
         data = typeof data === 'object' ? data : {};
         data["specificCodeToRun"] = this.specificCodeToRun;
+        data["entryPoint"] = this.entryPoint;
         return data;
     }
 
@@ -7404,6 +7444,8 @@ export class RunOptions implements IRunOptions {
 export interface IRunOptions {
     /** Gets or sets a snippet of code to run instead of the full script. */
     specificCodeToRun?: string | undefined;
+    /** Selects a parameterless static alternate script entry point. */
+    entryPoint?: string | undefined;
 }
 
 /** A JSON-primitive browser event routed to one live script control. */

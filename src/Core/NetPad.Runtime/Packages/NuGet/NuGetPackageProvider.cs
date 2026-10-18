@@ -225,6 +225,13 @@ public class NuGetPackageProvider(
             .Select(itemPath => new PackageAsset(itemPath))
             .ToHashSet();
 
+        var analyzerDirectory = Path.Combine(installPath, "analyzers", "dotnet", "cs");
+        if (Directory.Exists(analyzerDirectory))
+        {
+            final.UnionWith(Directory.EnumerateFiles(analyzerDirectory, "*.dll", SearchOption.AllDirectories)
+                .Select(itemPath => new PackageAsset(itemPath)));
+        }
+
         return Task.FromResult(final);
 
         IEnumerable<string> GetNearestItems(FrameworkSpecificGroup[] items)
@@ -1158,6 +1165,18 @@ public class NuGetPackageProvider(
                 if (!File.Exists(path)) return null;
                 assets.Add(new PackageAsset(path));
             }
+
+            var analyzerDirectory = Path.Combine(installPath, "analyzers", "dotnet", "cs");
+            var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var expectedAnalyzerPaths = Directory.Exists(analyzerDirectory)
+                ? Directory.EnumerateFiles(analyzerDirectory, "*.dll", SearchOption.AllDirectories)
+                    .Select(Path.GetFullPath)
+                    .ToHashSet(pathComparer)
+                : new HashSet<string>(pathComparer);
+            var cachedAnalyzerPaths = assets.Where(asset => asset.IsAnalyzerAsset)
+                .Select(asset => Path.GetFullPath(asset.Path))
+                .ToHashSet(pathComparer);
+            if (!expectedAnalyzerPaths.SetEquals(cachedAnalyzerPaths)) return null;
 
             return assets;
         }

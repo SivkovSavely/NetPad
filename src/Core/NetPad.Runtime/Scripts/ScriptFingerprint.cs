@@ -30,6 +30,8 @@ public record ScriptFingerprint(
 {
     public string LoadedSourcesHash { get; init; } = string.Empty;
     public bool CheckedArithmetic { get; init; } = true;
+    public string AnalyzerAssetsHash { get; init; } = string.Empty;
+    public string? EntryPoint { get; init; }
 
     private static readonly JsonSerializerOptions _serializerOptions = new()
     {
@@ -219,6 +221,18 @@ public record ScriptFingerprint(
                 _ => throw new NotSupportedException($"{r.GetType().Name} is not supported.")
             };
         }
+    }
+
+    public static string HashAnalyzerAssets(IEnumerable<ReferenceAsset> assets)
+    {
+        var inputs = assets
+            .Where(asset => asset.IsAnalyzerAsset)
+            .Select(asset => $"{asset.Path}\0{GetFileLastWriteTicks(asset.Path)}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        return inputs.Length == 0 ? string.Empty : Sha256Hex(string.Join("\n", inputs));
     }
 
     private static string Sha256Hex(string s)

@@ -162,4 +162,19 @@ public class ScriptCompilerTests
         Assert.Null(result);
     }
 
+    [Fact]
+    public async Task Alternate_Entry_Point_Compiles_Without_Top_Level_Statements()
+    {
+        SetupCompilerReturns(true);
+        var script = ScriptTestHelper.CreateScript();
+        var code = "Console.WriteLine(\"ordinary\");\n" +
+                   "public partial class Program { public static void Main1() {} }";
+
+        var result = await CreateCompiler().ParseAndCompileAsync(code, script, CancellationToken.None, "Main1");
+
+        Assert.NotNull(result);
+        Assert.Contains("global::Program.Main1();", _compiledCodeInputs[0]);
+        Assert.DoesNotContain("Console.WriteLine(\"ordinary\")", _compiledCodeInputs[0]);
+    }
+
 }

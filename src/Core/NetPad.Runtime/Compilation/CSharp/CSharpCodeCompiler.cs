@@ -36,7 +36,7 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
         var assemblyBytes = stream.ToArray();
 
         return new CompilationResult(
-            result.Success,
+            result.Success && !generatorDiagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
             new AssemblyName(assemblyName),
             assemblyFileName,
             assemblyBytes,
@@ -86,15 +86,30 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
         );
 
         // Run the built-in source generators
-        var generators = GetSourceGenerators(assemblyLocations);
+        var generators = GetSourceGenerators(assemblyLocations.Concat(input.AnalyzerFileReferences), out var discoveryDiagnostics);
         var driver = CSharpGeneratorDriver.Create(
             generators: generators,
             additionalTexts: null,
             parseOptions: (CSharpParseOptions)compilation.SyntaxTrees[0].Options,
             optionsProvider: null);
 
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var sourceGenCompilation, out var generatorDiagnostics);
-        return ((CSharpCompilation)sourceGenCompilation, generatorDiagnostics);
+        try
+        {
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out var sourceGenCompilation, out var generatorDiagnostics);
+            return ((CSharpCompilation)sourceGenCompilation, discoveryDiagnostics.AddRange(generatorDiagnostics));
+        }
+        catch (Exception exception)
+        {
+            var descriptor = new DiagnosticDescriptor(
+                "NPADGENRUN",
+                "Source generator execution failure",
+                "Source generator execution failed: {0}",
+                "Compilation",
+                DiagnosticSeverity.Error,
+                isEnabledByDefault: true);
+            var error = Diagnostic.Create(descriptor, Location.None, exception.Message);
+            return (compilation, discoveryDiagnostics.Add(error));
+        }
     }
 
     private static PortableExecutableReference[] BuildMetadataReferences(
@@ -110,13 +125,38 @@ public class CSharpCodeCompiler(IDotNetInfo dotNetInfo, ICodeAnalysisService cod
             .ToArray();
     }
 
-    private static ISourceGenerator[] GetSourceGenerators(HashSet<string> assemblyLocations)
+    private static ISourceGenerator[] GetSourceGenerators(IEnumerable<string> assemblyLocations, out ImmutableArray<Diagnostic> diagnostics)
     {
         var assemblyLoader = new FromAssemblyLoader();
-        return assemblyLocations
-            .Select(loc => new AnalyzerFileReference(loc, assemblyLoader))
-            .SelectMany(x => x.GetGenerators("C#"))
-            .ToArray();
+        var generators = new List<ISourceGenerator>();
+        var errors = ImmutableArray.CreateBuilder<Diagnostic>();
+        var descriptor = new DiagnosticDescriptor(
+            "NPADGENLOAD",
+            "Source generator load failure",
+            "Failed to load source generators from '{0}': {1}",
+            "Compilation",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+        foreach (var path in assemblyLocations.Distinct(StringComparer.Ordinal))
+        {
+            if (!File.Exists(path))
+            {
+                errors.Add(Diagnostic.Create(descriptor, Location.None, path, "Analyzer assembly file does not exist."));
+                continue;
+            }
+
+            try
+            {
+                generators.AddRange(new AnalyzerFileReference(path, assemblyLoader).GetGenerators("C#"));
+            }
+            catch (Exception exception)
+            {
+                errors.Add(Diagnostic.Create(descriptor, Location.None, path, exception.Message));
+            }
+        }
+
+        diagnostics = errors.ToImmutable();
+        return generators.ToArray();
     }
 
     private static string GetCompiledAssemblyFileExtension(OutputKind outputKind)
